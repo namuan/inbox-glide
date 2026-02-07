@@ -18,6 +18,7 @@
 		4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BCA5D1AA98EB2D03736440 /* Account.swift */; };
 		51351536E1494BAC3550551E /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34AE5B8897D83A21595F3D08 /* AISettingsView.swift */; };
 		75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8360FBCE436B4CF5619E663C /* RemindersService.swift */; };
+		7A271EDB20E0DE6F05A8B606 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */; };
 		7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */; };
 		7BE4C15E54A067B57FE55504 /* PIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */; };
 		81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */; };
@@ -36,6 +37,8 @@
 		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
 		D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */; };
 		E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23857CF30A40C77CC197739A /* ActionPadView.swift */; };
+		F9832AE88CA249CADF5EDA5F /* ProviderInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */; };
+		FD98DE3669B0210DB36B57CC /* AccountSetupGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */; };
 		FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000D5707AA9BA773EBFC7BCE /* RootView.swift */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +47,7 @@
 		01B644598A77BA09E7C57A75 /* InboxGlide.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InboxGlide.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		057220EE05EE73D78294259B /* AccountsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsSettingsView.swift; sourceTree = "<group>"; };
+		0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSetupGuideView.swift; sourceTree = "<group>"; };
 		0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedMailAction.swift; sourceTree = "<group>"; };
 		1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxGlideApp.swift; sourceTree = "<group>"; };
 		23857CF30A40C77CC197739A /* ActionPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionPadView.swift; sourceTree = "<group>"; };
@@ -57,6 +61,7 @@
 		5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		51BCA5D1AA98EB2D03736440 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		5AF7E24B6580EC6FEF659CAE /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderInstructionsView.swift; sourceTree = "<group>"; };
 		8360FBCE436B4CF5619E663C /* RemindersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersService.swift; sourceTree = "<group>"; };
 		858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		86D5940FC4D29E44FECC0F18 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -69,6 +74,7 @@
 		B597D048430A6634B70A88DB /* MailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailStore.swift; sourceTree = "<group>"; };
 		B698A3E24B63937145B7550B /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
 		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
+		CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideSettingsView.swift; sourceTree = "<group>"; };
 		FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailCardView.swift; sourceTree = "<group>"; };
@@ -115,9 +121,12 @@
 		7723314230B6CFB69C3128DE /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */,
 				23857CF30A40C77CC197739A /* ActionPadView.swift */,
 				26887FF1E407D2D7CDECF086 /* DeckView.swift */,
 				FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */,
+				CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */,
+				820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */,
 				9FC14234670B98358BD37630 /* ReplyComposerView.swift */,
 				000D5707AA9BA773EBFC7BCE /* RootView.swift */,
 				D771376BDD2506E57485BAB3 /* SettingsView.swift */,
@@ -233,6 +242,7 @@
 				9CD969718268855C713DA7FB /* AIReplyService.swift in Sources */,
 				51351536E1494BAC3550551E /* AISettingsView.swift in Sources */,
 				4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */,
+				FD98DE3669B0210DB36B57CC /* AccountSetupGuideView.swift in Sources */,
 				BE2B43948491FDBC0C0A674D /* AccountsSettingsView.swift in Sources */,
 				E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */,
 				D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */,
@@ -250,9 +260,11 @@
 				A0CE54CA4C6904FFC192A011 /* NetworkMonitor.swift in Sources */,
 				D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */,
 				BFE398328E776333F895DDDE /* NotificationsSettingsView.swift in Sources */,
+				7A271EDB20E0DE6F05A8B606 /* OnboardingView.swift in Sources */,
 				7BE4C15E54A067B57FE55504 /* PIIScrubber.swift in Sources */,
 				C3786D52CBD436707DE65F21 /* PreferencesStore.swift in Sources */,
 				97E64D58CE5E1F8DC2166D00 /* PrivacySettingsView.swift in Sources */,
+				F9832AE88CA249CADF5EDA5F /* ProviderInstructionsView.swift in Sources */,
 				BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */,
 				75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */,
 				0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */,
