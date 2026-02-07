@@ -7,6 +7,7 @@ struct AccountsSettingsView: View {
     @State private var provider: MailProvider = .gmail
     @State private var displayName: String = ""
     @State private var email: String = ""
+    @State private var showingSetupGuide = false
 
     var body: some View {
         Form {
@@ -34,6 +35,17 @@ struct AccountsSettingsView: View {
             }
 
             Section("Add Account") {
+                Button("Open Setup Guide") {
+                    showingSetupGuide = true
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Divider()
+                
+                Text("Quick Add (Advanced)")
+                    .font(.headline)
+                    .padding(.top, 8)
+                
                 Picker("Provider", selection: $provider) {
                     ForEach(MailProvider.allCases) { p in
                         Text(p.displayName).tag(p)
@@ -53,6 +65,13 @@ struct AccountsSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Accounts")
+        .sheet(isPresented: $showingSetupGuide) {
+            AccountSetupGuideView(
+                onComplete: { showingSetupGuide = false },
+                onBack: { showingSetupGuide = false }
+            )
+            .environmentObject(mailStore)
+        }
     }
 
     private func addAccount() {
