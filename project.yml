@@ -1,0 +1,26 @@
+name: InboxGlide
+options:
+  bundleIdPrefix: com.inboxglide
+  createIntermediateGroups: true
+
+targets:
+  InboxGlide:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: InboxGlide
+        excludes:
+          - Resources
+    resources:
+      - path: InboxGlide/Resources
+    settings:
+      base:
+        PRODUCT_NAME: InboxGlide
+        PRODUCT_BUNDLE_IDENTIFIER: com.inboxglide.InboxGlide
+        INFOPLIST_FILE: InboxGlide/Info.plist
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
