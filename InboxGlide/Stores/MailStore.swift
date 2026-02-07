@@ -157,19 +157,7 @@ final class MailStore: ObservableObject {
     }
 
     func addSampleAccount() {
-        let account = MailAccount(
-            id: UUID(),
-            provider: MailProvider.allCases.randomElement() ?? .gmail,
-            displayName: "Sample Account",
-            emailAddress: "sample@inboxglide.local",
-            colorHex: "#3B82F6"
-        )
-        accounts.append(account)
-        if selectedAccountID == nil {
-            selectedAccountID = account.id
-        }
-        scheduleSave()
-        rebuildDeck()
+        bootstrapSampleData()
     }
 
     func addAccount(provider: MailProvider, displayName: String, emailAddress: String) {
@@ -250,8 +238,6 @@ final class MailStore: ObservableObject {
             blockedSenders = snapshot.blockedSenders
             unsubscribedSenders = snapshot.unsubscribedSenders
             queuedActions = snapshot.queuedActions
-        } else {
-            bootstrapSampleData()
         }
         rebuildDeck()
     }
@@ -301,8 +287,13 @@ final class MailStore: ObservableObject {
         queuedActions = []
 
         secureStore.save(StoreSnapshot(accounts: accounts, messages: messages, blockedSenders: blockedSenders, unsubscribedSenders: unsubscribedSenders, queuedActions: queuedActions))
+        
+        if selectedAccountID == nil {
+            selectedAccountID = a1.id
+        }
+        rebuildDeck()
     }
-
+    
     private func scheduleSave() {
         saveWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in

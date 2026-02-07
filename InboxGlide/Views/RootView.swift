@@ -4,6 +4,8 @@ struct RootView: View {
     @EnvironmentObject private var preferences: PreferencesStore
     @EnvironmentObject private var mailStore: MailStore
     @EnvironmentObject private var networkMonitor: NetworkMonitor
+    
+    @State private var showingOnboarding = false
 
     var body: some View {
         NavigationSplitView {
@@ -42,5 +44,17 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 980, minHeight: 640)
+        .sheet(isPresented: $showingOnboarding) {
+            OnboardingView()
+                .environmentObject(preferences)
+                .environmentObject(mailStore)
+        }
+        .onAppear {
+            if !preferences.hasCompletedOnboarding && mailStore.accounts.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showingOnboarding = true
+                }
+            }
+        }
     }
 }
