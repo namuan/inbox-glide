@@ -76,6 +76,8 @@ final class PreferencesStore: ObservableObject {
         static let aiMode = "ai.mode"
         static let analyticsOptIn = "privacy.analyticsOptIn"
         static let crashOptIn = "privacy.crashOptIn"
+        
+        static let hasCompletedOnboarding = "onboarding.completed"
     }
 
     private let defaults: UserDefaults
@@ -109,6 +111,8 @@ final class PreferencesStore: ObservableObject {
 
     @Published var analyticsOptIn: Bool { didSet { defaults.set(analyticsOptIn, forKey: Keys.analyticsOptIn) } }
     @Published var crashReportingOptIn: Bool { didSet { defaults.set(crashReportingOptIn, forKey: Keys.crashOptIn) } }
+    
+    @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -149,6 +153,8 @@ final class PreferencesStore: ObservableObject {
         self.aiMode = AIMode(rawValue: defaults.string(forKey: Keys.aiMode) ?? "") ?? .local
         self.analyticsOptIn = defaults.object(forKey: Keys.analyticsOptIn) as? Bool ?? false
         self.crashReportingOptIn = defaults.object(forKey: Keys.crashOptIn) as? Bool ?? false
+        
+        self.hasCompletedOnboarding = defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool ?? false
     }
 
     func action(for direction: GlideDirection, useSecondary: Bool) -> GlideAction {
