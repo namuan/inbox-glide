@@ -1,0 +1,454 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03C61B8977224BB0E357D504 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */; };
+		0503EF347D265287730D48F3 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86D5940FC4D29E44FECC0F18 /* Keychain.swift */; };
+		0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FC14234670B98358BD37630 /* ReplyComposerView.swift */; };
+		10C3FC90601D60A18074A481 /* GlideDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82E4899D71A77E2BF76C92A /* GlideDirection.swift */; };
+		129C9B0C4DE2533D63AC3EC5 /* DeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26887FF1E407D2D7CDECF086 /* DeckView.swift */; };
+		3AE0EFCFF27DCB35A9E3FB5B /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF7E24B6580EC6FEF659CAE /* SidebarView.swift */; };
+		424CB7AE37948A478716FC47 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D771376BDD2506E57485BAB3 /* SettingsView.swift */; };
+		4CC18CF0535343AE6EE9F885 /* MailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B597D048430A6634B70A88DB /* MailStore.swift */; };
+		4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BCA5D1AA98EB2D03736440 /* Account.swift */; };
+		51351536E1494BAC3550551E /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34AE5B8897D83A21595F3D08 /* AISettingsView.swift */; };
+		75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8360FBCE436B4CF5619E663C /* RemindersService.swift */; };
+		7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */; };
+		7BE4C15E54A067B57FE55504 /* PIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */; };
+		81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */; };
+		83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A700FED79871FF27D7C87E13 /* EmailMessage.swift */; };
+		8B3F2A7C577BA06E59D0124C /* GlideAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */; };
+		97E64D58CE5E1F8DC2166D00 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3952EC5AFD37182DFA121778 /* PrivacySettingsView.swift */; };
+		9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */; };
+		9CD969718268855C713DA7FB /* AIReplyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA36E03968A63874068B9F0 /* AIReplyService.swift */; };
+		A0CE54CA4C6904FFC192A011 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */; };
+		A63920E4B261CA85EDD61DDC /* GlideSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */; };
+		BE2B43948491FDBC0C0A674D /* AccountsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057220EE05EE73D78294259B /* AccountsSettingsView.swift */; };
+		BFE398328E776333F895DDDE /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */; };
+		BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */; };
+		C3786D52CBD436707DE65F21 /* PreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */; };
+		C54A19CB88E10B6684ADCFB7 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */; };
+		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
+		D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */; };
+		E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23857CF30A40C77CC197739A /* ActionPadView.swift */; };
+		FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000D5707AA9BA773EBFC7BCE /* RootView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		000D5707AA9BA773EBFC7BCE /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		01B644598A77BA09E7C57A75 /* InboxGlide.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InboxGlide.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
+		057220EE05EE73D78294259B /* AccountsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsSettingsView.swift; sourceTree = "<group>"; };
+		0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedMailAction.swift; sourceTree = "<group>"; };
+		1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxGlideApp.swift; sourceTree = "<group>"; };
+		23857CF30A40C77CC197739A /* ActionPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionPadView.swift; sourceTree = "<group>"; };
+		26887FF1E407D2D7CDECF086 /* DeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckView.swift; sourceTree = "<group>"; };
+		282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesStore.swift; sourceTree = "<group>"; };
+		2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventMonitor.swift; sourceTree = "<group>"; };
+		34AE5B8897D83A21595F3D08 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsView.swift; sourceTree = "<group>"; };
+		3952EC5AFD37182DFA121778 /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
+		396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideAction.swift; sourceTree = "<group>"; };
+		469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
+		5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
+		51BCA5D1AA98EB2D03736440 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
+		5AF7E24B6580EC6FEF659CAE /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		8360FBCE436B4CF5619E663C /* RemindersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersService.swift; sourceTree = "<group>"; };
+		858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		86D5940FC4D29E44FECC0F18 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDirectories.swift; sourceTree = "<group>"; };
+		8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIIScrubber.swift; sourceTree = "<group>"; };
+		9FC14234670B98358BD37630 /* ReplyComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyComposerView.swift; sourceTree = "<group>"; };
+		A700FED79871FF27D7C87E13 /* EmailMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailMessage.swift; sourceTree = "<group>"; };
+		ACA36E03968A63874068B9F0 /* AIReplyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIReplyService.swift; sourceTree = "<group>"; };
+		B46A20E5DE8B28573F6A0984 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B597D048430A6634B70A88DB /* MailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailStore.swift; sourceTree = "<group>"; };
+		B698A3E24B63937145B7550B /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
+		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
+		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideSettingsView.swift; sourceTree = "<group>"; };
+		FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailCardView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0665D4E18FAC3A19EC937B85 /* InboxGlide */ = {
+			isa = PBXGroup;
+			children = (
+				1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */,
+				B46A20E5DE8B28573F6A0984 /* Info.plist */,
+				B61F7C3C0C9FE36F1280ED9F /* Models */,
+				70A49E35F13B0AA9591B2950 /* Services */,
+				B8640919B8CF51282C99E783 /* Stores */,
+				CB8CCE09B1A460ADD341F6AF /* Utilities */,
+				7723314230B6CFB69C3128DE /* Views */,
+			);
+			path = InboxGlide;
+			sourceTree = "<group>";
+		};
+		3F299C4DC3BE81674A0140B7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				01B644598A77BA09E7C57A75 /* InboxGlide.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		70A49E35F13B0AA9591B2950 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				ACA36E03968A63874068B9F0 /* AIReplyService.swift */,
+				8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */,
+				86D5940FC4D29E44FECC0F18 /* Keychain.swift */,
+				858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */,
+				B698A3E24B63937145B7550B /* NotificationScheduler.swift */,
+				8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */,
+				8360FBCE436B4CF5619E663C /* RemindersService.swift */,
+				469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		7723314230B6CFB69C3128DE /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				23857CF30A40C77CC197739A /* ActionPadView.swift */,
+				26887FF1E407D2D7CDECF086 /* DeckView.swift */,
+				FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */,
+				9FC14234670B98358BD37630 /* ReplyComposerView.swift */,
+				000D5707AA9BA773EBFC7BCE /* RootView.swift */,
+				D771376BDD2506E57485BAB3 /* SettingsView.swift */,
+				5AF7E24B6580EC6FEF659CAE /* SidebarView.swift */,
+				9DED65D6FD095B76A48A664F /* Settings */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		9DED65D6FD095B76A48A664F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				057220EE05EE73D78294259B /* AccountsSettingsView.swift */,
+				34AE5B8897D83A21595F3D08 /* AISettingsView.swift */,
+				5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */,
+				F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */,
+				028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */,
+				3952EC5AFD37182DFA121778 /* PrivacySettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		B61F7C3C0C9FE36F1280ED9F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				51BCA5D1AA98EB2D03736440 /* Account.swift */,
+				A700FED79871FF27D7C87E13 /* EmailMessage.swift */,
+				396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */,
+				B82E4899D71A77E2BF76C92A /* GlideDirection.swift */,
+				0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B8640919B8CF51282C99E783 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				B597D048430A6634B70A88DB /* MailStore.swift */,
+				282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		CB8CCE09B1A460ADD341F6AF /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		D0FF8FCBF5F1E126B6810D7F = {
+			isa = PBXGroup;
+			children = (
+				0665D4E18FAC3A19EC937B85 /* InboxGlide */,
+				3F299C4DC3BE81674A0140B7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		55B3F8DF0E3F9E171964F2EE /* InboxGlide */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 403253B74E90639BDB811889 /* Build configuration list for PBXNativeTarget "InboxGlide" */;
+			buildPhases = (
+				5D3F040B9002DEBBF0D22288 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = InboxGlide;
+			packageProductDependencies = (
+			);
+			productName = InboxGlide;
+			productReference = 01B644598A77BA09E7C57A75 /* InboxGlide.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C9E99D9B78DA089858294D9A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 375C99DD57D1D4A27B81CE71 /* Build configuration list for PBXProject "InboxGlide" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D0FF8FCBF5F1E126B6810D7F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				55B3F8DF0E3F9E171964F2EE /* InboxGlide */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5D3F040B9002DEBBF0D22288 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9CD969718268855C713DA7FB /* AIReplyService.swift in Sources */,
+				51351536E1494BAC3550551E /* AISettingsView.swift in Sources */,
+				4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */,
+				BE2B43948491FDBC0C0A674D /* AccountsSettingsView.swift in Sources */,
+				E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */,
+				D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */,
+				C54A19CB88E10B6684ADCFB7 /* AppearanceSettingsView.swift in Sources */,
+				129C9B0C4DE2533D63AC3EC5 /* DeckView.swift in Sources */,
+				9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */,
+				83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */,
+				8B3F2A7C577BA06E59D0124C /* GlideAction.swift in Sources */,
+				10C3FC90601D60A18074A481 /* GlideDirection.swift in Sources */,
+				A63920E4B261CA85EDD61DDC /* GlideSettingsView.swift in Sources */,
+				81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */,
+				7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */,
+				0503EF347D265287730D48F3 /* Keychain.swift in Sources */,
+				4CC18CF0535343AE6EE9F885 /* MailStore.swift in Sources */,
+				A0CE54CA4C6904FFC192A011 /* NetworkMonitor.swift in Sources */,
+				D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */,
+				BFE398328E776333F895DDDE /* NotificationsSettingsView.swift in Sources */,
+				7BE4C15E54A067B57FE55504 /* PIIScrubber.swift in Sources */,
+				C3786D52CBD436707DE65F21 /* PreferencesStore.swift in Sources */,
+				97E64D58CE5E1F8DC2166D00 /* PrivacySettingsView.swift in Sources */,
+				BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */,
+				75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */,
+				0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */,
+				FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */,
+				03C61B8977224BB0E357D504 /* SecureStore.swift in Sources */,
+				424CB7AE37948A478716FC47 /* SettingsView.swift in Sources */,
+				3AE0EFCFF27DCB35A9E3FB5B /* SidebarView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2B462A10983AFCE5578D39E1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		3EEA892A6AEC4F577CD1FC26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = InboxGlide/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.inboxglide.InboxGlide;
+				PRODUCT_NAME = InboxGlide;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		907BB1A3E551E5F17FBED29D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = InboxGlide/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.inboxglide.InboxGlide;
+				PRODUCT_NAME = InboxGlide;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		A57CE631912C4E446E3BF893 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		375C99DD57D1D4A27B81CE71 /* Build configuration list for PBXProject "InboxGlide" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A57CE631912C4E446E3BF893 /* Debug */,
+				2B462A10983AFCE5578D39E1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		403253B74E90639BDB811889 /* Build configuration list for PBXNativeTarget "InboxGlide" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3EEA892A6AEC4F577CD1FC26 /* Debug */,
+				907BB1A3E551E5F17FBED29D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C9E99D9B78DA089858294D9A /* Project object */;
+}
