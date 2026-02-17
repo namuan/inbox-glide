@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>CFBundleURLName</key>
+      <string>com.inboxglide.oauth</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>$(GMAIL_OAUTH_REDIRECT_SCHEME)</string>
+      </array>
+    </dict>
+  </array>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
@@ -16,6 +29,14 @@
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSMinimumSystemVersion</key>
   <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+  <key>GmailOAuthClientID</key>
+  <string>$(GMAIL_OAUTH_CLIENT_ID)</string>
+  <key>GmailOAuthClientSecret</key>
+  <string>$(GMAIL_OAUTH_CLIENT_SECRET)</string>
+  <key>GmailOAuthRedirectURI</key>
+  <string>http://127.0.0.1:53682/oauth/callback</string>
+  <key>GmailOAuthScopes</key>
+  <string>https://www.googleapis.com/auth/gmail.readonly</string>
   <key>NSRemindersUsageDescription</key>
   <string>InboxGlide can create reminders from emails you choose.</string>
 </dict>

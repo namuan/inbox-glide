@@ -8,6 +8,9 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
+    configFiles:
+      Debug: Config/AppConfig.xcconfig
+      Release: Config/AppConfig.xcconfig
     sources:
       - path: InboxGlide
         excludes:

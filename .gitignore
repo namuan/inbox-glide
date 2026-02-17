@@ -12,3 +12,4 @@ xcuserdata/
 
 # Secrets
 secrets/
+Config/LocalSecrets.xcconfig
