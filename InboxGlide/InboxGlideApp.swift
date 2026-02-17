@@ -37,8 +37,13 @@ struct InboxGlideApp: App {
         let prefs = PreferencesStore()
         let network = NetworkMonitor()
         let secureStore = SecureStore(appName: "InboxGlide")
-        let store = MailStore(preferences: prefs, networkMonitor: network, secureStore: secureStore)
         let gmailAuthStore = GmailAuthStore()
+        let store = MailStore(
+            preferences: prefs,
+            networkMonitor: network,
+            secureStore: secureStore,
+            gmailAuthStore: gmailAuthStore
+        )
 
         _preferences = StateObject(wrappedValue: prefs)
         _networkMonitor = StateObject(wrappedValue: network)

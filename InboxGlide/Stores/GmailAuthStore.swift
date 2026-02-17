@@ -123,6 +123,12 @@ final class GmailAuthStore: ObservableObject {
         return try await gmailService.fetchRecentInboxMessages(accessToken: accessToken, maxResults: maxResults)
     }
 
+    func trashMessage(id: String) async throws {
+        logger.info("Requesting Gmail message trash operation.", category: "GmailAuth", metadata: ["messageID": id])
+        let accessToken = try await currentAccessToken()
+        try await gmailService.trashMessage(accessToken: accessToken, id: id)
+    }
+
     private func handleRedirect(_ url: URL) {
         guard let oauthService else { return }
         Task {
