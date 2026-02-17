@@ -134,7 +134,7 @@ final class MailStore: ObservableObject {
 
     func perform(action: GlideAction, isSecondary: Bool, messageID: UUID) {
         guard messages.contains(where: { $0.id == messageID }) else { return }
-        if action.isDestructive, preferences.confirmDestructiveActions {
+        if action.isDestructive, action != .delete, preferences.confirmDestructiveActions {
             pendingConfirmation = PendingConfirmation(action: action, isSecondary: isSecondary, messageID: messageID)
             return
         }
