@@ -5,20 +5,42 @@ struct AccountSetupGuideView: View {
     
     let onComplete: () -> Void
     let onBack: () -> Void
+    let title: String
+    let subtitle: String
+    let allowsProviderSelection: Bool
+    let backButtonTitle: String
     
-    @State private var selectedProvider: MailProvider = .gmail
+    @State private var selectedProvider: MailProvider
     @State private var displayName: String = ""
     @State private var email: String = ""
     @State private var showingProviderInstructions = false
+
+    init(
+        onComplete: @escaping () -> Void,
+        onBack: @escaping () -> Void,
+        initialProvider: MailProvider = .gmail,
+        title: String = "Add Your First Email Account",
+        subtitle: String = "Choose your email provider and we'll guide you through the setup",
+        allowsProviderSelection: Bool = true,
+        backButtonTitle: String = "Back"
+    ) {
+        self.onComplete = onComplete
+        self.onBack = onBack
+        self.title = title
+        self.subtitle = subtitle
+        self.allowsProviderSelection = allowsProviderSelection
+        self.backButtonTitle = backButtonTitle
+        _selectedProvider = State(initialValue: initialProvider)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 8) {
-                Text("Add Your First Email Account")
+                Text(title)
                     .font(.title2.bold())
                 
-                Text("Choose your email provider and we'll guide you through the setup")
+                Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -27,19 +49,33 @@ struct AccountSetupGuideView: View {
             
             // Content
             VStack(spacing: 24) {
-                // Provider Selection
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Email Provider")
-                        .font(.headline)
-                    
-                    HStack(spacing: 16) {
-                        ForEach(MailProvider.allCases) { provider in
-                            ProviderCard(
-                                provider: provider,
-                                isSelected: selectedProvider == provider,
-                                action: { selectedProvider = provider }
-                            )
+                if allowsProviderSelection {
+                    // Provider Selection
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Email Provider")
+                            .font(.headline)
+                        
+                        HStack(spacing: 16) {
+                            ForEach(MailProvider.allCases) { provider in
+                                ProviderCard(
+                                    provider: provider,
+                                    isSelected: selectedProvider == provider,
+                                    action: { selectedProvider = provider }
+                                )
+                            }
                         }
+                    }
+                } else {
+                    // Provider is fixed (e.g. Gmail onboarding from Settings)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Email Provider")
+                            .font(.headline)
+                        ProviderCard(
+                            provider: selectedProvider,
+                            isSelected: true,
+                            action: {}
+                        )
+                        .disabled(true)
                     }
                 }
                 
@@ -81,7 +117,7 @@ struct AccountSetupGuideView: View {
             
             // Actions
             HStack(spacing: 16) {
-                Button("Back") {
+                Button(backButtonTitle) {
                     onBack()
                 }
                 

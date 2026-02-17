@@ -4,10 +4,11 @@ struct AccountsSettingsView: View {
     @EnvironmentObject private var preferences: PreferencesStore
     @EnvironmentObject private var mailStore: MailStore
 
+    @State private var setupFlow: SetupFlow?
     @State private var provider: MailProvider = .gmail
     @State private var displayName: String = ""
     @State private var email: String = ""
-    @State private var showingSetupGuide = false
+    @State private var accountPendingDeletion: MailAccount?
 
     var body: some View {
         Form {
@@ -21,26 +22,45 @@ struct AccountsSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(mailStore.accounts) { account in
-                        HStack {
+                        HStack(alignment: .center, spacing: 12) {
                             Circle()
                                 .fill(Color(hex: account.colorHex) ?? .accentColor)
                                 .frame(width: 10, height: 10)
-                            Text(account.displayName)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(account.displayName)
+                                Text(account.emailAddress)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                             Spacer()
-                            Text(account.emailAddress)
-                                .foregroundStyle(.secondary)
+                            Button(role: .destructive) {
+                                accountPendingDeletion = account
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Delete \(account.displayName)")
                         }
                     }
                 }
             }
 
             Section("Add Account") {
-                Button("Open Setup Guide") {
-                    showingSetupGuide = true
+                Button("Connect Gmail") {
+                    setupFlow = .gmailOnboarding
                 }
                 .buttonStyle(.borderedProminent)
                 
                 Divider()
+
+                Text("Other Providers")
+                    .font(.headline)
+                    .padding(.top, 8)
+
+                Button("Open Full Setup Guide") {
+                    setupFlow = .fullSetup
+                }
+                .buttonStyle(.bordered)
                 
                 Text("Quick Add (Advanced)")
                     .font(.headline)
@@ -65,12 +85,36 @@ struct AccountsSettingsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Accounts")
-        .sheet(isPresented: $showingSetupGuide) {
-            AccountSetupGuideView(
-                onComplete: { showingSetupGuide = false },
-                onBack: { showingSetupGuide = false }
+        .sheet(item: $setupFlow) { flow in
+            switch flow {
+            case .gmailOnboarding:
+                AccountSetupGuideView(
+                    onComplete: { setupFlow = nil },
+                    onBack: { setupFlow = nil },
+                    initialProvider: .gmail,
+                    title: "Connect Gmail Account",
+                    subtitle: "Authorize InboxGlide for Gmail and finish setup with your account details.",
+                    allowsProviderSelection: false,
+                    backButtonTitle: "Cancel"
+                )
+                .environmentObject(mailStore)
+            case .fullSetup:
+                AccountSetupGuideView(
+                    onComplete: { setupFlow = nil },
+                    onBack: { setupFlow = nil }
+                )
+                .environmentObject(mailStore)
+            }
+        }
+        .alert(item: $accountPendingDeletion) { account in
+            Alert(
+                title: Text("Delete Account"),
+                message: Text("Are you sure you want to delete \(account.displayName) (\(account.emailAddress))? This removes the account and any locally stored messages."),
+                primaryButton: .destructive(Text("Delete")) {
+                    mailStore.deleteAccount(account)
+                },
+                secondaryButton: .cancel()
             )
-            .environmentObject(mailStore)
         }
     }
 
@@ -79,6 +123,13 @@ struct AccountsSettingsView: View {
         displayName = ""
         email = ""
     }
+}
+
+private enum SetupFlow: String, Identifiable {
+    case gmailOnboarding
+    case fullSetup
+
+    var id: String { rawValue }
 }
 
 private extension Color {
