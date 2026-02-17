@@ -180,6 +180,18 @@ final class MailStore: ObservableObject {
         rebuildDeck()
     }
 
+    func deleteAccount(_ account: MailAccount) {
+        guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return }
+        accounts.remove(at: index)
+        messages.removeAll { $0.accountID == account.id }
+        queuedActions.removeAll { $0.accountID == account.id }
+        if selectedAccountID == account.id {
+            selectedAccountID = accounts.first?.id
+        }
+        scheduleSave()
+        rebuildDeck()
+    }
+
     func applyMoveToFolder(_ folder: String, messageID: UUID) {
         let value = folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }

@@ -9,3 +9,6 @@ DerivedData/
 
 xcuserdata/
 *.xcuserdatad/
+
+# Secrets
+secrets/
