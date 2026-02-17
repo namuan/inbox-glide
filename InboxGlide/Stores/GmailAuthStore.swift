@@ -113,6 +113,16 @@ final class GmailAuthStore: ObservableObject {
         logger.info("Stored Gmail token deleted from keychain.", category: "GmailAuth")
     }
 
+    func fetchRecentInboxMessages(maxResults: Int = 25) async throws -> [GmailInboxMessage] {
+        logger.info(
+            "Fetching recent Gmail inbox messages through auth store.",
+            category: "GmailAuth",
+            metadata: ["maxResults": "\(maxResults)"]
+        )
+        let accessToken = try await currentAccessToken()
+        return try await gmailService.fetchRecentInboxMessages(accessToken: accessToken, maxResults: maxResults)
+    }
+
     private func handleRedirect(_ url: URL) {
         guard let oauthService else { return }
         Task {

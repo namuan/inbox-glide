@@ -25,6 +25,7 @@ enum MessageCategory: String, Codable, CaseIterable, Identifiable {
 struct EmailMessage: Identifiable, Codable, Hashable {
     var id: UUID
     var accountID: UUID
+    var providerMessageID: String? = nil
 
     var receivedAt: Date
     var senderName: String
