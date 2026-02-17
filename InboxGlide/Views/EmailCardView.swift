@@ -19,7 +19,7 @@ struct EmailCardView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(5)
 
-            if !message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if shouldShowBody {
                 Text(message.body)
                     .font(.system(size: 14 + preferences.fontScale))
                     .foregroundStyle(.primary)
@@ -129,6 +129,14 @@ struct EmailCardView: View {
 
     private var account: MailAccount? {
         mailStore.accounts.first(where: { $0.id == message.accountID })
+    }
+
+    private var shouldShowBody: Bool {
+        let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.isEmpty { return false }
+
+        let preview = message.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        return preview.caseInsensitiveCompare(body) != .orderedSame
     }
 }
 

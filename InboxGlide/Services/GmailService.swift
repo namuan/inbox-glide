@@ -102,6 +102,32 @@ final class GmailService {
         return results.sorted { $0.receivedAt > $1.receivedAt }
     }
 
+    func trashMessage(accessToken: String, id: String) async throws {
+        guard let encodedID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(encodedID)/trash") else {
+            throw OAuthServiceError.tokenExchangeFailed("Invalid Gmail trash message URL.")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OAuthServiceError.tokenExchangeFailed("Invalid Gmail trash message response.")
+        }
+        guard (200 ..< 300).contains(http.statusCode) else {
+            logger.error(
+                "Gmail trash message request failed.",
+                category: "GmailAPI",
+                metadata: ["status": "\(http.statusCode)", "messageID": id]
+            )
+            throw OAuthServiceError.tokenExchangeFailed("Failed to delete Gmail message (HTTP \(http.statusCode)).")
+        }
+
+        logger.info("Moved Gmail message to trash.", category: "GmailAPI", metadata: ["messageID": id])
+    }
+
     private func fetchMessageDetail(accessToken: String, id: String) async throws -> GmailInboxMessage {
         var components = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(id)")
         components?.queryItems = [

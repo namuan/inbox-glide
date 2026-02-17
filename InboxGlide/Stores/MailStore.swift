@@ -71,6 +71,7 @@ final class MailStore: ObservableObject {
     private let preferences: PreferencesStore
     private let networkMonitor: NetworkMonitor
     private let secureStore: SecureStore
+    private let gmailAuthStore: GmailAuthStore
     private let logger = AppLogger.shared
 
     private var saveWorkItem: DispatchWorkItem?
@@ -78,10 +79,11 @@ final class MailStore: ObservableObject {
     private var refreshTimer: Timer?
     private var pendingAdvanceMessageID: UUID?
 
-    init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore) {
+    init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
         self.networkMonitor = networkMonitor
         self.secureStore = secureStore
+        self.gmailAuthStore = gmailAuthStore
         logger.info("Initializing MailStore.", category: "MailStore")
 
         loadOrBootstrap()
@@ -415,8 +417,10 @@ final class MailStore: ObservableObject {
 
         switch action {
         case .delete:
+            let message = messages[idx]
             messages[idx].deletedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            trashOnGmailIfPossible(message)
 
         case .archive:
             messages[idx].archivedAt = Date()
@@ -515,6 +519,38 @@ final class MailStore: ObservableObject {
         if let first = deckMessageIDs.first, first == messageID {
             deckMessageIDs.removeFirst()
             deckMessageIDs.append(first)
+        }
+    }
+
+    private func trashOnGmailIfPossible(_ message: EmailMessage) {
+        guard let account = accounts.first(where: { $0.id == message.accountID }),
+              account.provider == .gmail,
+              let providerMessageID = message.providerMessageID else {
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await gmailAuthStore.trashMessage(id: providerMessageID)
+                logger.info(
+                    "Deleted Gmail message on provider.",
+                    category: "MailStore",
+                    metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                )
+            } catch {
+                logger.error(
+                    "Failed deleting Gmail message on provider.",
+                    category: "MailStore",
+                    metadata: ["messageID": providerMessageID, "error": error.localizedDescription]
+                )
+                await MainActor.run {
+                    self.errorAlert = ErrorAlert(
+                        title: "Gmail Delete Failed",
+                        message: "Deleted locally, but Gmail delete failed: \(error.localizedDescription)"
+                    )
+                }
+            }
         }
     }
 }
