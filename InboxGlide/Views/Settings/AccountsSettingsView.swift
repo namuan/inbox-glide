@@ -3,12 +3,14 @@ import SwiftUI
 struct AccountsSettingsView: View {
     @EnvironmentObject private var preferences: PreferencesStore
     @EnvironmentObject private var mailStore: MailStore
+    @EnvironmentObject private var gmailAuth: GmailAuthStore
 
     @State private var setupFlow: SetupFlow?
     @State private var provider: MailProvider = .gmail
     @State private var displayName: String = ""
     @State private var email: String = ""
     @State private var accountPendingDeletion: MailAccount?
+    private let logger = AppLogger.shared
 
     var body: some View {
         Form {
@@ -16,7 +18,7 @@ struct AccountsSettingsView: View {
                 Toggle("Enable unified inbox", isOn: $preferences.unifiedInboxEnabled)
             }
 
-            Section("Connected Accounts (Local Stub)") {
+            Section("Connected Accounts") {
                 if mailStore.accounts.isEmpty {
                     Text("No accounts yet.")
                         .foregroundStyle(.secondary)
@@ -47,9 +49,25 @@ struct AccountsSettingsView: View {
 
             Section("Add Account") {
                 Button("Connect Gmail") {
-                    setupFlow = .gmailOnboarding
+                    Task {
+                        await connectGmail()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(gmailAuth.isLoading)
+
+                if gmailAuth.isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Connecting Gmail...")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let connectedEmail = gmailAuth.connectedEmail {
+                    Label("Connected: \(connectedEmail)", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.subheadline)
+                }
                 
                 Divider()
 
@@ -78,7 +96,7 @@ struct AccountsSettingsView: View {
                 }
                 .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                Text("OAuth + syncing is not implemented yet; accounts are stored locally so you can exercise the UI.")
+                Text("Gmail uses OAuth. Other providers are currently local setup stubs.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -87,17 +105,6 @@ struct AccountsSettingsView: View {
         .navigationTitle("Accounts")
         .sheet(item: $setupFlow) { flow in
             switch flow {
-            case .gmailOnboarding:
-                AccountSetupGuideView(
-                    onComplete: { setupFlow = nil },
-                    onBack: { setupFlow = nil },
-                    initialProvider: .gmail,
-                    title: "Connect Gmail Account",
-                    subtitle: "Authorize InboxGlide for Gmail and finish setup with your account details.",
-                    allowsProviderSelection: false,
-                    backButtonTitle: "Cancel"
-                )
-                .environmentObject(mailStore)
             case .fullSetup:
                 AccountSetupGuideView(
                     onComplete: { setupFlow = nil },
@@ -116,6 +123,16 @@ struct AccountsSettingsView: View {
                 secondaryButton: .cancel()
             )
         }
+        .alert("Gmail Connection Failed", isPresented: Binding(
+            get: { gmailAuth.authError != nil },
+            set: { if !$0 { gmailAuth.authError = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                gmailAuth.authError = nil
+            }
+        } message: {
+            Text(gmailAuth.authError ?? "Unable to connect Gmail.")
+        }
     }
 
     private func addAccount() {
@@ -123,10 +140,46 @@ struct AccountsSettingsView: View {
         displayName = ""
         email = ""
     }
+
+    private func connectGmail() async {
+        logger.info("User tapped Connect Gmail.", category: "AccountsSettings")
+        let connected = await gmailAuth.signIn()
+        guard connected, let emailAddress = gmailAuth.connectedEmail else {
+            logger.warning(
+                "Connect Gmail did not complete successfully.",
+                category: "AccountsSettings",
+                metadata: ["authError": gmailAuth.authError ?? "none"]
+            )
+            return
+        }
+
+        let alreadyExists = mailStore.accounts.contains { account in
+            account.provider == .gmail && account.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
+        }
+        guard !alreadyExists else {
+            logger.info("Gmail account already exists locally; skipping duplicate add.", category: "AccountsSettings", metadata: ["email": emailAddress])
+            return
+        }
+
+        mailStore.addAccount(
+            provider: .gmail,
+            displayName: defaultDisplayName(for: emailAddress),
+            emailAddress: emailAddress
+        )
+        logger.info("Added Gmail account after successful OAuth connection.", category: "AccountsSettings", metadata: ["email": emailAddress])
+    }
+
+    private func defaultDisplayName(for emailAddress: String) -> String {
+        let localPart = emailAddress.split(separator: "@").first.map(String.init) ?? "Gmail"
+        let cleaned = localPart.replacingOccurrences(of: ".", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty {
+            return "Gmail"
+        }
+        return cleaned.capitalized
+    }
 }
 
 private enum SetupFlow: String, Identifiable {
-    case gmailOnboarding
     case fullSetup
 
     var id: String { rawValue }

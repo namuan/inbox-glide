@@ -1,0 +1,6 @@
+// Checked-in defaults; local values are loaded from LocalSecrets.xcconfig.
+GMAIL_OAUTH_CLIENT_ID = CHANGE_ME
+GMAIL_OAUTH_CLIENT_SECRET = CHANGE_ME
+GMAIL_OAUTH_REDIRECT_SCHEME = CHANGE_ME
+
+#include? "LocalSecrets.xcconfig"

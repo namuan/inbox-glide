@@ -6,6 +6,7 @@ final class SecureStore {
     private let keychain: Keychain
     private let keyAccount = "encryptionKey"
     private let storeFileName = "store.bin"
+    private let logger = AppLogger.shared
 
     init(appName: String) {
         self.appName = appName
@@ -23,8 +24,10 @@ final class SecureStore {
 
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
+            logger.debug("Loaded encrypted store snapshot from disk.", category: "SecureStore", metadata: ["path": url.path])
             return try decoder.decode(T.self, from: plaintext)
         } catch {
+            logger.warning("Secure store load failed or no data yet.", category: "SecureStore", metadata: ["error": error.localizedDescription])
             return nil
         }
     }
@@ -41,8 +44,10 @@ final class SecureStore {
             let sealed = try AES.GCM.seal(plaintext, using: key)
             guard let combined = sealed.combined else { return }
             try combined.write(to: url, options: [.atomic])
+            logger.debug("Saved encrypted store snapshot to disk.", category: "SecureStore", metadata: ["path": url.path])
         } catch {
             // Best-effort; app continues.
+            logger.error("Secure store save failed.", category: "SecureStore", metadata: ["error": error.localizedDescription])
         }
     }
 
@@ -50,8 +55,10 @@ final class SecureStore {
         do {
             let url = try storeURL()
             try FileManager.default.removeItem(at: url)
+            logger.info("Deleted secure store file.", category: "SecureStore", metadata: ["path": url.path])
         } catch {
             // Ignore.
+            logger.warning("Delete secure store file failed or file missing.", category: "SecureStore", metadata: ["error": error.localizedDescription])
         }
     }
 

@@ -71,6 +71,7 @@ final class MailStore: ObservableObject {
     private let preferences: PreferencesStore
     private let networkMonitor: NetworkMonitor
     private let secureStore: SecureStore
+    private let logger = AppLogger.shared
 
     private var saveWorkItem: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "InboxGlide.MailStore.Save", qos: .utility)
@@ -80,6 +81,7 @@ final class MailStore: ObservableObject {
         self.preferences = preferences
         self.networkMonitor = networkMonitor
         self.secureStore = secureStore
+        logger.info("Initializing MailStore.", category: "MailStore")
 
         loadOrBootstrap()
 
@@ -173,6 +175,11 @@ final class MailStore: ObservableObject {
             colorHex: ["#2563EB", "#16A34A", "#F97316", "#DC2626", "#0EA5E9"].randomElement() ?? "#2563EB"
         )
         accounts.append(account)
+        logger.info(
+            "Added account to local store.",
+            category: "MailStore",
+            metadata: ["provider": provider.rawValue, "email": cleanedEmail, "accountID": account.id.uuidString]
+        )
         if selectedAccountID == nil {
             selectedAccountID = account.id
         }
@@ -183,6 +190,11 @@ final class MailStore: ObservableObject {
     func deleteAccount(_ account: MailAccount) {
         guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return }
         accounts.remove(at: index)
+        logger.info(
+            "Deleted account from local store.",
+            category: "MailStore",
+            metadata: ["provider": account.provider.rawValue, "email": account.emailAddress, "accountID": account.id.uuidString]
+        )
         messages.removeAll { $0.accountID == account.id }
         queuedActions.removeAll { $0.accountID == account.id }
         if selectedAccountID == account.id {
