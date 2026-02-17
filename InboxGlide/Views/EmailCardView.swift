@@ -23,7 +23,7 @@ struct EmailCardView: View {
                 Text(message.body)
                     .font(.system(size: 14 + preferences.fontScale))
                     .foregroundStyle(.primary)
-                    .lineLimit(14)
+                    .lineLimit(nil)
                     .textSelection(.enabled)
             }
 
