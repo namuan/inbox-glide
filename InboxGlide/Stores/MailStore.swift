@@ -54,8 +54,8 @@ final class MailStore: ObservableObject {
     @Published private(set) var accounts: [MailAccount] = []
     @Published private(set) var messages: [EmailMessage] = []
 
-    @Published var selectedAccountID: UUID? = nil
-    @Published var selectedCategory: MessageCategory? = nil
+    @Published var selectedAccountID: UUID? = nil { didSet { rebuildDeck() } }
+    @Published var selectedCategory: MessageCategory? = nil { didSet { rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
     @Published private(set) var queuedActions: [QueuedMailAction] = []
@@ -76,6 +76,7 @@ final class MailStore: ObservableObject {
     private var saveWorkItem: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "InboxGlide.MailStore.Save", qos: .utility)
     private var refreshTimer: Timer?
+    private var pendingAdvanceMessageID: UUID?
 
     init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore) {
         self.preferences = preferences
@@ -124,6 +125,14 @@ final class MailStore: ObservableObject {
             .sorted(by: { $0.receivedAt > $1.receivedAt })
 
         deckMessageIDs = visible.map { $0.id }
+
+        if let pending = pendingAdvanceMessageID {
+            pendingAdvanceMessageID = nil
+            if let index = deckMessageIDs.firstIndex(of: pending), deckMessageIDs.count > 1 {
+                let moved = deckMessageIDs.remove(at: index)
+                deckMessageIDs.append(moved)
+            }
+        }
     }
 
     func performGlide(_ direction: GlideDirection, useSecondary: Bool) {
@@ -168,7 +177,7 @@ final class MailStore: ObservableObject {
             provider: provider,
             displayName: cleanedName,
             emailAddress: cleanedEmail,
-            colorHex: ["#2563EB", "#16A34A", "#F97316", "#DC2626", "#0EA5E9"].randomElement() ?? "#2563EB"
+            colorHex: nextColorHex(for: provider)
         )
         accounts.append(account)
         logger.info(
@@ -363,6 +372,28 @@ final class MailStore: ObservableObject {
         return nil
     }
 
+    private func nextColorHex(for provider: MailProvider) -> String {
+        let palette = [
+            "#2563EB", "#16A34A", "#F97316", "#DC2626", "#0EA5E9",
+            "#D97706", "#7C3AED", "#0891B2", "#BE123C", "#059669"
+        ]
+
+        let usedForProvider = Set(
+            accounts
+                .filter { $0.provider == provider }
+                .map(\.colorHex)
+        )
+
+        if let firstUnused = palette.first(where: { !usedForProvider.contains($0) }) {
+            return firstUnused
+        }
+
+        let usageCount = accounts.reduce(into: [String: Int]()) { acc, account in
+            acc[account.colorHex, default: 0] += 1
+        }
+        return palette.min { usageCount[$0, default: 0] < usageCount[$1, default: 0] } ?? "#2563EB"
+    }
+
     private func persist() {
         let snapshot = StoreSnapshot(
             accounts: accounts,
@@ -393,6 +424,7 @@ final class MailStore: ObservableObject {
 
         case .markRead:
             messages[idx].isRead = true
+            advanceToNextMessage(after: messageID)
 
         case .markUnread:
             messages[idx].isRead = false
@@ -462,10 +494,7 @@ final class MailStore: ObservableObject {
             return
 
         case .skip:
-            if let first = deckMessageIDs.first, first == messageID {
-                deckMessageIDs.removeFirst()
-                deckMessageIDs.append(first)
-            }
+            advanceToNextMessage(after: messageID)
 
         case .reply:
             composer = ComposerPresentation(messageID: messageID, mode: .reply)
@@ -479,5 +508,13 @@ final class MailStore: ObservableObject {
             syncIfPossible()
         }
         rebuildDeck()
+    }
+
+    private func advanceToNextMessage(after messageID: UUID) {
+        pendingAdvanceMessageID = messageID
+        if let first = deckMessageIDs.first, first == messageID {
+            deckMessageIDs.removeFirst()
+            deckMessageIDs.append(first)
+        }
     }
 }
