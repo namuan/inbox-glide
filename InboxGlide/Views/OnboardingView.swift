@@ -25,9 +25,6 @@ struct OnboardingView: View {
     
     private func completeOnboarding() {
         preferences.hasCompletedOnboarding = true
-        if mailStore.accounts.isEmpty {
-            mailStore.addSampleAccount()
-        }
         dismiss()
     }
 }
