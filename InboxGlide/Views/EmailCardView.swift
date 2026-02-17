@@ -27,19 +27,6 @@ struct EmailCardView: View {
                     .textSelection(.enabled)
             }
 
-            if !message.labels.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(message.labels.sorted(), id: \.self) { label in
-                        Text(label)
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.thinMaterial, in: Capsule(style: .continuous))
-                    }
-                }
-                .padding(.top, 2)
-            }
-
             Spacer(minLength: 0)
 
             footer
@@ -120,6 +107,14 @@ struct EmailCardView: View {
             }
 
             Spacer()
+
+            Button {
+                mailStore.perform(action: .skip, isSecondary: false, messageID: message.id)
+            } label: {
+                Label("Skip", systemImage: "arrow.uturn.right")
+            }
+            .buttonStyle(.bordered)
+            .help("Move this email to the back of the stack")
 
             Button {
                 mailStore.perform(action: .aiReply, isSecondary: false, messageID: message.id)

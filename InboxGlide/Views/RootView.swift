@@ -29,18 +29,6 @@ struct RootView: View {
                         .foregroundStyle(.secondary)
                         .help("Offline: actions will queue and sync later")
                 }
-
-                if preferences.smartCategoriesEnabled {
-                    Menu {
-                        Button("All") { mailStore.selectedCategory = nil }
-                        Divider()
-                        ForEach(MessageCategory.allCases) { category in
-                            Button(category.displayName) { mailStore.selectedCategory = category }
-                        }
-                    } label: {
-                        Label("Category", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                }
             }
         }
         .frame(minWidth: 980, minHeight: 640)

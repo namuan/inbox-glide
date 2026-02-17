@@ -29,7 +29,7 @@ struct GlideSettingsView: View {
 
     private func actionPicker(_ label: String, selection: Binding<GlideAction>) -> some View {
         Picker(label, selection: selection) {
-            ForEach(GlideAction.allCases) { action in
+            ForEach(GlideAction.supportedInUI) { action in
                 Label(action.displayName, systemImage: action.systemImage)
                     .tag(action)
             }

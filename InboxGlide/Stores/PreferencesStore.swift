@@ -117,15 +117,15 @@ final class PreferencesStore: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        let leftP = GlideAction(rawValue: defaults.string(forKey: Keys.leftPrimary) ?? "") ?? .delete
-        let rightP = GlideAction(rawValue: defaults.string(forKey: Keys.rightPrimary) ?? "") ?? .star
-        let upP = GlideAction(rawValue: defaults.string(forKey: Keys.upPrimary) ?? "") ?? .unsubscribe
-        let downP = GlideAction(rawValue: defaults.string(forKey: Keys.downPrimary) ?? "") ?? .blockSender
+        let leftP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.leftPrimary), fallback: .delete)
+        let rightP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.rightPrimary), fallback: .star)
+        let upP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.upPrimary), fallback: .archive)
+        let downP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.downPrimary), fallback: .markRead)
 
-        let leftS = GlideAction(rawValue: defaults.string(forKey: Keys.leftSecondary) ?? "") ?? .archive
-        let rightS = GlideAction(rawValue: defaults.string(forKey: Keys.rightSecondary) ?? "") ?? .markImportant
-        let upS = GlideAction(rawValue: defaults.string(forKey: Keys.upSecondary) ?? "") ?? .snooze4h
-        let downS = GlideAction(rawValue: defaults.string(forKey: Keys.downSecondary) ?? "") ?? .skip
+        let leftS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.leftSecondary), fallback: .archive)
+        let rightS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.rightSecondary), fallback: .markImportant)
+        let upS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.upSecondary), fallback: .snooze4h)
+        let downS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.downSecondary), fallback: .skip)
 
         self.leftPrimaryAction = leftP
         self.rightPrimaryAction = rightP
@@ -184,5 +184,12 @@ final class PreferencesStore: ObservableObject {
         case .comfortable: return 18
         case .spacious: return 24
         }
+    }
+
+    private static func sanitizedAction(raw: String?, fallback: GlideAction) -> GlideAction {
+        guard let raw, let action = GlideAction(rawValue: raw), action.isSelectableInUI else {
+            return fallback
+        }
+        return action
     }
 }

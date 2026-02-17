@@ -80,4 +80,17 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
             return false
         }
     }
+
+    var isSelectableInUI: Bool {
+        switch self {
+        case .blockSender, .unsubscribe, .unsubscribeAndDeleteAllFromSender:
+            return false
+        default:
+            return true
+        }
+    }
+
+    static var supportedInUI: [GlideAction] {
+        allCases.filter(\.isSelectableInUI)
+    }
 }
