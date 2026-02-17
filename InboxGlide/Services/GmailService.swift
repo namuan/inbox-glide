@@ -8,6 +8,7 @@ struct GmailInboxMessage: Sendable {
     let senderEmail: String
     let subject: String
     let snippet: String
+    let body: String
     let labels: [String]
     let isUnread: Bool
     let isStarred: Bool
@@ -131,10 +132,7 @@ final class GmailService {
     private func fetchMessageDetail(accessToken: String, id: String) async throws -> GmailInboxMessage {
         var components = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/\(id)")
         components?.queryItems = [
-            URLQueryItem(name: "format", value: "metadata"),
-            URLQueryItem(name: "metadataHeaders", value: "From"),
-            URLQueryItem(name: "metadataHeaders", value: "Subject"),
-            URLQueryItem(name: "metadataHeaders", value: "Date")
+            URLQueryItem(name: "format", value: "full")
         ]
         guard let url = components?.url else {
             throw OAuthServiceError.tokenExchangeFailed("Invalid Gmail message detail URL.")
@@ -155,6 +153,7 @@ final class GmailService {
         let headers = message.payload?.headers ?? []
         let fromValue = Self.headerValue(name: "From", from: headers) ?? "Unknown <unknown@example.com>"
         let subject = Self.headerValue(name: "Subject", from: headers) ?? "(No Subject)"
+        let body = Self.extractBody(from: message.payload)
 
         let sender = Self.parseFromHeader(fromValue)
         let receivedAt: Date
@@ -173,6 +172,7 @@ final class GmailService {
             senderEmail: sender.email,
             subject: subject,
             snippet: message.snippet ?? "",
+            body: body,
             labels: labels,
             isUnread: labels.contains("UNREAD"),
             isStarred: labels.contains("STARRED"),
@@ -195,6 +195,78 @@ final class GmailService {
         }
         return (trimmed, trimmed.contains("@") ? trimmed : "unknown@example.com")
     }
+
+    private static func extractBody(from payload: GmailPayload?) -> String {
+        guard let payload else { return "" }
+
+        var plainParts: [String] = []
+        var htmlParts: [String] = []
+        collectBodyParts(from: payload, plainParts: &plainParts, htmlParts: &htmlParts)
+
+        if !plainParts.isEmpty {
+            return joinSections(plainParts)
+        }
+        if !htmlParts.isEmpty {
+            let converted = htmlParts.map(htmlToText)
+            return joinSections(converted)
+        }
+        return ""
+    }
+
+    private static func collectBodyParts(from part: GmailPayload, plainParts: inout [String], htmlParts: inout [String]) {
+        let mimeType = part.mimeType?.lowercased() ?? ""
+
+        if let data = part.body?.data, !data.isEmpty, let decoded = decodeBase64URL(data) {
+            let text = String(data: decoded, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !text.isEmpty {
+                if mimeType.hasPrefix("text/plain") {
+                    plainParts.append(text)
+                } else if mimeType.hasPrefix("text/html") {
+                    htmlParts.append(text)
+                } else if mimeType.hasPrefix("text/") {
+                    plainParts.append(text)
+                }
+            }
+        }
+
+        for child in part.parts ?? [] {
+            collectBodyParts(from: child, plainParts: &plainParts, htmlParts: &htmlParts)
+        }
+    }
+
+    private static func decodeBase64URL(_ value: String) -> Data? {
+        var b64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padding = b64.count % 4
+        if padding > 0 {
+            b64 += String(repeating: "=", count: 4 - padding)
+        }
+        return Data(base64Encoded: b64)
+    }
+
+    private static func joinSections(_ sections: [String]) -> String {
+        sections
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+    }
+
+    private static func htmlToText(_ html: String) -> String {
+        guard let data = html.data(using: .utf8) else { return html }
+        if let attributed = try? NSAttributedString(
+            data: data,
+            options: [
+                .documentType: NSAttributedString.DocumentType.html,
+                .characterEncoding: String.Encoding.utf8.rawValue
+            ],
+            documentAttributes: nil
+        ) {
+            return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return html
+    }
 }
 
 private struct GmailMessageListResponse: Decodable {
@@ -215,7 +287,16 @@ private struct GmailMessageResponse: Decodable {
 }
 
 private struct GmailPayload: Decodable {
+    let mimeType: String?
     let headers: [GmailHeader]?
+    let body: GmailBody?
+    let parts: [GmailPayload]?
+}
+
+private struct GmailBody: Decodable {
+    let size: Int?
+    let data: String?
+    let attachmentId: String?
 }
 
 private struct GmailHeader: Decodable {
