@@ -8,6 +8,7 @@ struct EmailCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            accountBanner
             header
             Text(message.subject)
                 .font(.system(size: 20 + preferences.fontScale, weight: .semibold))
@@ -43,6 +44,38 @@ struct EmailCardView: View {
         )
         .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 10)
         .accessibilityElement(children: .contain)
+    }
+
+    private var accountBanner: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color(hex: account?.colorHex ?? "#2563EB") ?? .accentColor)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+
+            Text(account?.displayName ?? "Unknown Account")
+                .font(.caption.weight(.semibold))
+
+            Text(account?.emailAddress ?? "No account")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(account?.provider.displayName ?? "Account")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.thinMaterial, in: Capsule(style: .continuous))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(.separator, lineWidth: 1)
+        )
     }
 
     private var header: some View {
@@ -89,6 +122,10 @@ struct EmailCardView: View {
             .help("Generate a quick reply")
         }
         .font(.system(size: 12 + preferences.fontScale))
+    }
+
+    private var account: MailAccount? {
+        mailStore.accounts.first(where: { $0.id == message.accountID })
     }
 }
 
@@ -145,5 +182,19 @@ private struct Flow<Content: View>: View {
                 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension Color {
+    init?(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        guard hex.hasPrefix("#") else { return nil }
+        let start = hex.index(hex.startIndex, offsetBy: 1)
+        let str = String(hex[start...])
+        guard str.count == 6, let val = Int(str, radix: 16) else { return nil }
+        let r = Double((val >> 16) & 0xFF) / 255.0
+        let g = Double((val >> 8) & 0xFF) / 255.0
+        let b = Double(val & 0xFF) / 255.0
+        self = Color(red: r, green: g, blue: b)
     }
 }
