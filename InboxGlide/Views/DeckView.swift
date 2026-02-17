@@ -89,7 +89,8 @@ struct DeckView: View {
                             let direction = inferDirection(from: value.translation)
                             if let direction {
                                 let useSecondary = NSEvent.modifierFlags.contains(.option)
-                                if preferences.action(for: direction, useSecondary: useSecondary).isDestructive, preferences.confirmDestructiveActions {
+                                let action = preferences.action(for: direction, useSecondary: useSecondary)
+                                if action.isDestructive, action != .delete, preferences.confirmDestructiveActions {
                                     withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.85)) {
                                         dragOffset = .zero
                                     }

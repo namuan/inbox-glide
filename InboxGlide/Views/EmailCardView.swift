@@ -19,6 +19,14 @@ struct EmailCardView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(5)
 
+            if !message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(message.body)
+                    .font(.system(size: 14 + preferences.fontScale))
+                    .foregroundStyle(.primary)
+                    .lineLimit(14)
+                    .textSelection(.enabled)
+            }
+
             if !message.labels.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(message.labels.sorted(), id: \.self) { label in
