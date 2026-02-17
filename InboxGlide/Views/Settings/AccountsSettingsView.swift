@@ -10,6 +10,7 @@ struct AccountsSettingsView: View {
     @State private var displayName: String = ""
     @State private var email: String = ""
     @State private var accountPendingDeletion: MailAccount?
+    @State private var isSyncingGmail: Bool = false
     private let logger = AppLogger.shared
 
     var body: some View {
@@ -67,6 +68,23 @@ struct AccountsSettingsView: View {
                     Label("Connected: \(connectedEmail)", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.subheadline)
+
+                    Button("Sync Gmail Inbox") {
+                        Task {
+                            await syncGmailInbox()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSyncingGmail)
+
+                    if isSyncingGmail {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Syncing inbox…")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 
                 Divider()
@@ -156,8 +174,9 @@ struct AccountsSettingsView: View {
         let alreadyExists = mailStore.accounts.contains { account in
             account.provider == .gmail && account.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
         }
-        guard !alreadyExists else {
+        if alreadyExists {
             logger.info("Gmail account already exists locally; skipping duplicate add.", category: "AccountsSettings", metadata: ["email": emailAddress])
+            await syncGmailInbox()
             return
         }
 
@@ -167,6 +186,35 @@ struct AccountsSettingsView: View {
             emailAddress: emailAddress
         )
         logger.info("Added Gmail account after successful OAuth connection.", category: "AccountsSettings", metadata: ["email": emailAddress])
+        await syncGmailInbox()
+    }
+
+    private func syncGmailInbox() async {
+        guard let emailAddress = gmailAuth.connectedEmail else {
+            logger.warning("Sync requested without connected Gmail email.", category: "AccountsSettings")
+            return
+        }
+
+        if isSyncingGmail { return }
+        isSyncingGmail = true
+        defer { isSyncingGmail = false }
+
+        do {
+            let items = try await gmailAuth.fetchRecentInboxMessages(maxResults: 30)
+            mailStore.upsertGmailMessages(for: emailAddress, items: items)
+            logger.info(
+                "Gmail inbox sync completed from settings.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "fetched": "\(items.count)"]
+            )
+        } catch {
+            gmailAuth.authError = error.localizedDescription
+            logger.error(
+                "Gmail inbox sync failed from settings.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "error": error.localizedDescription]
+            )
+        }
     }
 
     private func defaultDisplayName(for emailAddress: String) -> String {

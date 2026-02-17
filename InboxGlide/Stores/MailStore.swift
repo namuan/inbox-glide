@@ -204,6 +204,86 @@ final class MailStore: ObservableObject {
         rebuildDeck()
     }
 
+    func upsertGmailMessages(for emailAddress: String, items: [GmailInboxMessage]) {
+        guard let account = accounts.first(where: {
+            $0.provider == .gmail && $0.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
+        }) else {
+            logger.warning(
+                "Cannot upsert Gmail messages because no matching account exists.",
+                category: "MailStore",
+                metadata: ["email": emailAddress]
+            )
+            return
+        }
+
+        var indexByProviderID: [String: Int] = [:]
+        for idx in messages.indices where messages[idx].accountID == account.id {
+            if let providerID = messages[idx].providerMessageID {
+                indexByProviderID[providerID] = idx
+            }
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for item in items {
+            if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].receivedAt = item.receivedAt
+                messages[existingIndex].senderName = item.senderName
+                messages[existingIndex].senderEmail = item.senderEmail
+                messages[existingIndex].subject = item.subject
+                messages[existingIndex].preview = item.snippet
+                messages[existingIndex].body = item.snippet
+                messages[existingIndex].isRead = !item.isUnread
+                messages[existingIndex].isStarred = item.isStarred
+                messages[existingIndex].isImportant = item.isImportant
+                messages[existingIndex].labels = item.labels
+                messages[existingIndex].category = Self.category(for: item.labels)
+                updated += 1
+                continue
+            }
+
+            let message = EmailMessage(
+                id: UUID(),
+                accountID: account.id,
+                providerMessageID: item.id,
+                receivedAt: item.receivedAt,
+                senderName: item.senderName,
+                senderEmail: item.senderEmail,
+                subject: item.subject,
+                preview: item.snippet,
+                body: item.snippet,
+                isRead: !item.isUnread,
+                isStarred: item.isStarred,
+                isImportant: item.isImportant,
+                labels: item.labels,
+                archivedAt: nil,
+                deletedAt: nil,
+                snoozedUntil: nil,
+                category: Self.category(for: item.labels)
+            )
+            messages.append(message)
+            indexByProviderID[item.id] = messages.count - 1
+            inserted += 1
+        }
+
+        if selectedAccountID == nil {
+            selectedAccountID = account.id
+        }
+        logger.info(
+            "Upserted Gmail messages.",
+            category: "MailStore",
+            metadata: [
+                "email": emailAddress,
+                "fetched": "\(items.count)",
+                "inserted": "\(inserted)",
+                "updated": "\(updated)"
+            ]
+        )
+        scheduleSave()
+        rebuildDeck()
+    }
+
     func applyMoveToFolder(_ folder: String, messageID: UUID) {
         let value = folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
@@ -325,6 +405,17 @@ final class MailStore: ObservableObject {
         }
         saveWorkItem = item
         saveQueue.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+
+    private static func category(for labels: [String]) -> MessageCategory? {
+        let set = Set(labels.map { $0.uppercased() })
+        if set.contains("CATEGORY_PERSONAL") { return .personal }
+        if set.contains("CATEGORY_PROMOTIONS") { return .promotions }
+        if set.contains("CATEGORY_UPDATES") { return .updates }
+        if set.contains("CATEGORY_FORUMS") { return .forums }
+        if set.contains("CATEGORY_SOCIAL") { return .social }
+        if set.contains("CATEGORY_PRIMARY") { return .work }
+        return nil
     }
 
     private func persist() {
