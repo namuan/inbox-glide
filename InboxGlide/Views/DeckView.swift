@@ -155,10 +155,6 @@ struct DeckView: View {
                 .fontWeight(.semibold)
             Text("No emails in the current view.")
                 .foregroundStyle(.secondary)
-            Button("Add Sample Account") {
-                mailStore.addSampleAccount()
-            }
-            .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

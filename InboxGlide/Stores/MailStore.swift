@@ -158,10 +158,6 @@ final class MailStore: ObservableObject {
         scheduleSave()
     }
 
-    func addSampleAccount() {
-        bootstrapSampleData()
-    }
-
     func addAccount(provider: MailProvider, displayName: String, emailAddress: String) {
         let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -346,58 +342,7 @@ final class MailStore: ObservableObject {
         rebuildDeck()
     }
 
-    private func bootstrapSampleData() {
-        let a1 = MailAccount(id: UUID(), provider: .gmail, displayName: "Work", emailAddress: "you@company.com", colorHex: "#2563EB")
-        let a2 = MailAccount(id: UUID(), provider: .fastmail, displayName: "Personal", emailAddress: "you@home.com", colorHex: "#16A34A")
-        let a3 = MailAccount(id: UUID(), provider: .yahoo, displayName: "Legacy", emailAddress: "you@yahoo.com", colorHex: "#F97316")
-        accounts = [a1, a2, a3]
 
-        selectedAccountID = a1.id
-
-        let now = Date()
-        func make(_ account: MailAccount, _ offsetHours: Int, _ sender: String, _ email: String, _ subject: String, _ preview: String, _ body: String, _ cat: MessageCategory) -> EmailMessage {
-            EmailMessage(
-                id: UUID(),
-                accountID: account.id,
-                receivedAt: Calendar.current.date(byAdding: .hour, value: -offsetHours, to: now) ?? now,
-                senderName: sender,
-                senderEmail: email,
-                subject: subject,
-                preview: preview,
-                body: body,
-                isRead: false,
-                isStarred: false,
-                isImportant: false,
-                labels: [],
-                archivedAt: nil,
-                deletedAt: nil,
-                snoozedUntil: nil,
-                category: cat
-            )
-        }
-
-        messages = [
-            make(a1, 1, "Ava", "ava@company.com", "Project update", "Quick status update for this week.", "Hi! Here's the status update...", .work),
-            make(a1, 3, "Build Bot", "ci@company.com", "Build failed", "The latest build failed on main.", "Details: ...", .updates),
-            make(a1, 6, "Team Forum", "forum@company.com", "Thread: Q1 planning", "New reply in the Q1 planning thread.", "...", .forums),
-            make(a2, 2, "Mom", "mom@example.com", "Dinner Sunday?", "Are you free on Sunday night?", "Call me when you can.", .personal),
-            make(a2, 5, "Neighborhood", "news@local.org", "Community updates", "This week's highlights.", "...", .updates),
-            make(a3, 4, "Sale Alerts", "newsletter@shop.com", "48-hour sale", "Everything is 30% off.", "Unsubscribe anytime.", .promotions),
-            make(a3, 7, "Social", "notify@social.example", "You have new mentions", "Two new mentions.", "...", .social)
-        ]
-
-        blockedSenders = []
-        unsubscribedSenders = []
-        queuedActions = []
-
-        secureStore.save(StoreSnapshot(accounts: accounts, messages: messages, blockedSenders: blockedSenders, unsubscribedSenders: unsubscribedSenders, queuedActions: queuedActions))
-        
-        if selectedAccountID == nil {
-            selectedAccountID = a1.id
-        }
-        rebuildDeck()
-    }
-    
     private func scheduleSave() {
         saveWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in

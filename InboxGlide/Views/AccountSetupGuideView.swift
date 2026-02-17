@@ -168,11 +168,7 @@ struct AccountSetupGuideView: View {
             displayName: displayName,
             emailAddress: email
         )
-        
-        if mailStore.messages.isEmpty {
-            mailStore.addSampleAccount()
-        }
-        
+
         onComplete()
     }
 }
