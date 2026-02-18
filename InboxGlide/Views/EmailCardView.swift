@@ -20,14 +20,18 @@ struct EmailCardView: View {
                 .lineLimit(5)
 
             if shouldShowBody {
-                Text(message.body)
-                    .font(.system(size: 14 + preferences.fontScale))
-                    .foregroundStyle(.primary)
-                    .lineLimit(nil)
-                    .textSelection(.enabled)
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(message.body)
+                        .font(.system(size: 14 + preferences.fontScale))
+                        .foregroundStyle(.primary)
+                        .lineLimit(nil)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
 
             footer
         }
