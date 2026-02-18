@@ -538,6 +538,12 @@ final class MailStore: ObservableObject {
                     category: "MailStore",
                     metadata: ["messageID": providerMessageID, "email": account.emailAddress]
                 )
+            } catch let gmailError as GmailServiceError where gmailError.statusCode == 404 {
+                logger.warning(
+                    "Gmail message already missing on provider; treating local delete as complete.",
+                    category: "MailStore",
+                    metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                )
             } catch {
                 logger.error(
                     "Failed deleting Gmail message on provider.",

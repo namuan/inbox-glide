@@ -1,5 +1,23 @@
 import Foundation
 
+enum GmailServiceError: LocalizedError {
+    case httpStatus(operation: String, statusCode: Int, messageID: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .httpStatus(let operation, let statusCode, _):
+            return "Failed to \(operation) (HTTP \(statusCode))."
+        }
+    }
+
+    var statusCode: Int {
+        switch self {
+        case .httpStatus(_, let statusCode, _):
+            return statusCode
+        }
+    }
+}
+
 struct GmailInboxMessage: Sendable {
     let id: String
     let threadID: String?
@@ -123,7 +141,7 @@ final class GmailService {
                 category: "GmailAPI",
                 metadata: ["status": "\(http.statusCode)", "messageID": id]
             )
-            throw OAuthServiceError.tokenExchangeFailed("Failed to delete Gmail message (HTTP \(http.statusCode)).")
+            throw GmailServiceError.httpStatus(operation: "delete Gmail message", statusCode: http.statusCode, messageID: id)
         }
 
         logger.info("Moved Gmail message to trash.", category: "GmailAPI", metadata: ["messageID": id])
