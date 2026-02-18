@@ -26,6 +26,7 @@ final class GmailAuthStore: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var token: StoredGmailOAuthToken?
+    private var hasAttemptedRestore = false
 
     init() {
         logger.info("Initializing GmailAuthStore.", category: "GmailAuth")
@@ -55,13 +56,17 @@ final class GmailAuthStore: ObservableObject {
             }
             .store(in: &cancellables)
 
-        Task {
-            await restoreSessionIfPossible()
-        }
     }
 
     func signIn() async -> Bool {
         logger.info("Gmail sign-in requested.", category: "GmailAuth")
+        await restoreSessionIfNeeded()
+        if isAuthenticated, connectedEmail != nil {
+            authError = nil
+            logger.info("Using restored Gmail auth session; skipping OAuth flow.", category: "GmailAuth")
+            return true
+        }
+
         guard let oauthService else {
             authError = authError ?? "Gmail OAuth is not configured for this build."
             logger.error("Sign-in aborted: OAuth service unavailable.", category: "GmailAuth")
@@ -119,12 +124,14 @@ final class GmailAuthStore: ObservableObject {
             category: "GmailAuth",
             metadata: ["maxResults": "\(maxResults)"]
         )
+        await restoreSessionIfNeeded()
         let accessToken = try await currentAccessToken()
         return try await gmailService.fetchRecentInboxMessages(accessToken: accessToken, maxResults: maxResults)
     }
 
     func trashMessage(id: String) async throws {
         logger.info("Requesting Gmail message trash operation.", category: "GmailAuth", metadata: ["messageID": id])
+        await restoreSessionIfNeeded()
         let accessToken = try await currentAccessToken()
         try await gmailService.trashMessage(accessToken: accessToken, id: id)
     }
@@ -158,6 +165,12 @@ final class GmailAuthStore: ObservableObject {
             authError = nil
             logger.warning("Failed restoring Gmail session; continuing signed out.", category: "GmailAuth", metadata: ["error": error.localizedDescription])
         }
+    }
+
+    private func restoreSessionIfNeeded() async {
+        if hasAttemptedRestore { return }
+        hasAttemptedRestore = true
+        await restoreSessionIfPossible()
     }
 
     private func loadProfileWithCurrentToken() async throws {
