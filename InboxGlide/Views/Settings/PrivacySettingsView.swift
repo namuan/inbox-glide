@@ -9,15 +9,6 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         Form {
-            Section("Controls") {
-                Toggle("Analytics (opt-in)", isOn: $preferences.analyticsOptIn)
-                Toggle("Crash reporting (opt-in)", isOn: $preferences.crashReportingOptIn)
-
-                Text("Off by default. No email content is sent.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Data") {
                 Button("Export Data (JSON)…") {
                     export()
