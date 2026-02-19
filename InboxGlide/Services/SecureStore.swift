@@ -7,6 +7,8 @@ final class SecureStore {
     private let keyAccount = "encryptionKey"
     private let storeFileName = "store.bin"
     private let logger = AppLogger.shared
+    private let keyLock = NSLock()
+    private var cachedKey: SymmetricKey?
 
     init(appName: String) {
         self.appName = appName
@@ -68,13 +70,27 @@ final class SecureStore {
     }
 
     private func loadOrCreateKey() throws -> SymmetricKey {
+        keyLock.lock()
+        if let cachedKey {
+            keyLock.unlock()
+            return cachedKey
+        }
+        keyLock.unlock()
+
         do {
             let data = try keychain.readData(account: keyAccount)
-            return SymmetricKey(data: data)
+            let key = SymmetricKey(data: data)
+            keyLock.lock()
+            cachedKey = key
+            keyLock.unlock()
+            return key
         } catch KeychainError.itemNotFound {
             let key = SymmetricKey(size: .bits256)
             let data = key.withUnsafeBytes { Data($0) }
             try keychain.upsertData(data, account: keyAccount)
+            keyLock.lock()
+            cachedKey = key
+            keyLock.unlock()
             return key
         }
     }
