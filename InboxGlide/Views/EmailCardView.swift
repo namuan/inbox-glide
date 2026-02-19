@@ -3,6 +3,7 @@ import SwiftUI
 struct EmailCardView: View {
     @EnvironmentObject private var preferences: PreferencesStore
     @EnvironmentObject private var mailStore: MailStore
+    @EnvironmentObject private var summaries: EmailSummaryService
 
     let message: EmailMessage
 
@@ -18,6 +19,10 @@ struct EmailCardView: View {
                 .font(.system(size: 14 + preferences.fontScale))
                 .foregroundStyle(.secondary)
                 .lineLimit(5)
+
+            if preferences.aiMode != .off {
+                summarySection
+            }
 
             if shouldShowBody {
                 ScrollView(.vertical, showsIndicators: true) {
@@ -43,6 +48,16 @@ struct EmailCardView: View {
         )
         .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 10)
         .accessibilityElement(children: .contain)
+        .onAppear {
+            if preferences.aiMode != .off {
+                summaries.summarizeIfNeeded(message)
+            }
+        }
+        .onChange(of: message.id) { _, _ in
+            if preferences.aiMode != .off {
+                summaries.summarizeIfNeeded(message)
+            }
+        }
     }
 
     private var accountBanner: some View {
@@ -127,6 +142,16 @@ struct EmailCardView: View {
             }
             .buttonStyle(.bordered)
             .help("Generate a quick reply")
+
+            if preferences.aiMode != .off {
+                Button {
+                    summaries.summarize(message, forceRefresh: true)
+                } label: {
+                    Label("Re-summarize", systemImage: "text.append")
+                }
+                .buttonStyle(.bordered)
+                .help("Refresh on-device email summary")
+            }
         }
         .font(.system(size: 12 + preferences.fontScale))
     }
@@ -141,6 +166,87 @@ struct EmailCardView: View {
 
         let preview = message.preview.trimmingCharacters(in: .whitespacesAndNewlines)
         return preview.caseInsensitiveCompare(body) != .orderedSame
+    }
+
+    @ViewBuilder
+    private var summarySection: some View {
+        switch summaries.state(for: message.id) {
+        case .idle:
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.secondary)
+                Text("Preparing summary…")
+                    .font(.system(size: 13 + preferences.fontScale))
+                    .foregroundStyle(.secondary)
+            }
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Summarizing on device…")
+                    .font(.system(size: 13 + preferences.fontScale))
+                    .foregroundStyle(.secondary)
+            }
+        case .failed(let reason):
+            Text(reason)
+                .font(.system(size: 13 + preferences.fontScale))
+                .foregroundStyle(.red)
+        case .ready(let result):
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Label(result.source == .foundationModel ? "On-device summary" : "Fallback summary", systemImage: "doc.text.magnifyingglass")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Text(displayUrgency(result.summary.urgency))
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.thinMaterial, in: Capsule(style: .continuous))
+                }
+                Text(result.summary.headline)
+                    .font(.system(size: 15 + preferences.fontScale, weight: .semibold))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                Text(result.summary.body)
+                    .font(.system(size: 13 + preferences.fontScale))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .truncationMode(.tail)
+                if !result.summary.actionItems.isEmpty {
+                    Text("Action items: \(result.summary.actionItems.joined(separator: "; "))")
+                        .font(.system(size: 12 + preferences.fontScale))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                if let note = result.note, !note.isEmpty {
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(.separator, lineWidth: 1)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Email summary")
+        }
+    }
+
+    private func displayUrgency(_ value: String) -> String {
+        switch value.lowercased() {
+        case "low": return "Low"
+        case "medium": return "Medium"
+        case "high": return "High"
+        default: return "Info"
+        }
     }
 }
 

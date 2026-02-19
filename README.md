@@ -11,6 +11,7 @@ This repo currently ships a local-first, offline-capable prototype:
 - Multi-account + optional unified inbox (sample/local accounts)
 - Local encrypted store (AES-GCM; key stored in macOS Keychain)
 - AI quick reply (local stub) with local PII scrubbing
+- Email summary with on-device Foundation Models support and local fallback
 - Optional daily reminder notifications
 - Data export + delete-all
 
