@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct EmailCardView: View {
     @EnvironmentObject private var preferences: PreferencesStore
@@ -25,15 +26,22 @@ struct EmailCardView: View {
             }
 
             if shouldShowBody {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(message.body)
-                        .font(.system(size: 14 + preferences.fontScale))
-                        .foregroundStyle(.primary)
-                        .lineLimit(nil)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if let htmlBody = sanitizedHTMLBody {
+                        EmailHTMLBodyView(html: htmlBody)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    } else {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            Text(message.body)
+                                .font(.system(size: 14 + preferences.fontScale))
+                                .foregroundStyle(.primary)
+                                .lineLimit(nil)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                    }
                 }
-                .frame(maxHeight: .infinity, alignment: .top)
             } else {
                 Spacer(minLength: 0)
             }
@@ -161,11 +169,20 @@ struct EmailCardView: View {
     }
 
     private var shouldShowBody: Bool {
+        if sanitizedHTMLBody != nil {
+            return true
+        }
         let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines)
         if body.isEmpty { return false }
 
         let preview = message.preview.trimmingCharacters(in: .whitespacesAndNewlines)
         return preview.caseInsensitiveCompare(body) != .orderedSame
+    }
+
+    private var sanitizedHTMLBody: String? {
+        let value = message.htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return nil }
+        return value
     }
 
     @ViewBuilder
@@ -246,6 +263,73 @@ struct EmailCardView: View {
         case "medium": return "Medium"
         case "high": return "High"
         default: return "Info"
+        }
+    }
+}
+
+private struct EmailHTMLBodyView: NSViewRepresentable {
+    let html: String
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.defaultWebpagePreferences.allowsContentJavaScript = false
+        config.websiteDataStore = .nonPersistent()
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.allowsMagnification = true
+        webView.allowsBackForwardNavigationGestures = false
+        webView.loadHTMLString(Self.wrapHTML(html), baseURL: nil)
+        return webView
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        nsView.loadHTMLString(Self.wrapHTML(html), baseURL: nil)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    private static func wrapHTML(_ rawHTML: String) -> String {
+        """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:;">
+        <style>
+        :root { color-scheme: light dark; }
+        html, body {
+          margin: 0;
+          padding: 0;
+          font: -apple-system-body;
+          line-height: 1.45;
+          overflow-wrap: anywhere;
+        }
+        body { padding: 2px 1px; }
+        img, table, pre, blockquote {
+          max-width: 100% !important;
+          height: auto !important;
+        }
+        </style>
+        </head>
+        <body>\(rawHTML)</body>
+        </html>
+        """
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+            guard let url = navigationAction.request.url else { return .cancel }
+            switch url.scheme?.lowercased() {
+            case "about", "data":
+                return .allow
+            default:
+                return .cancel
+            }
         }
     }
 }

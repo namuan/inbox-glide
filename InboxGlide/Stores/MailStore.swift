@@ -268,6 +268,7 @@ final class MailStore: ObservableObject {
                 messages[existingIndex].subject = item.subject
                 messages[existingIndex].preview = item.snippet
                 messages[existingIndex].body = item.body.isEmpty ? item.snippet : item.body
+                messages[existingIndex].htmlBody = item.htmlBody
                 messages[existingIndex].isRead = !item.isUnread
                 messages[existingIndex].isStarred = item.isStarred
                 messages[existingIndex].isImportant = item.isImportant
@@ -287,6 +288,7 @@ final class MailStore: ObservableObject {
                 subject: item.subject,
                 preview: item.snippet,
                 body: item.body.isEmpty ? item.snippet : item.body,
+                htmlBody: item.htmlBody,
                 isRead: !item.isUnread,
                 isStarred: item.isStarred,
                 isImportant: item.isImportant,
@@ -424,6 +426,7 @@ final class MailStore: ObservableObject {
                 messages[existingIndex].subject = item.subject
                 messages[existingIndex].preview = item.snippet
                 messages[existingIndex].body = item.body.isEmpty ? item.snippet : item.body
+                messages[existingIndex].htmlBody = item.htmlBody
                 messages[existingIndex].isRead = !item.isUnread
                 messages[existingIndex].isStarred = item.isStarred
                 messages[existingIndex].isImportant = item.isImportant
@@ -443,6 +446,7 @@ final class MailStore: ObservableObject {
                 subject: item.subject,
                 preview: item.snippet,
                 body: item.body.isEmpty ? item.snippet : item.body,
+                htmlBody: item.htmlBody,
                 isRead: !item.isUnread,
                 isStarred: item.isStarred,
                 isImportant: item.isImportant,
@@ -580,6 +584,7 @@ final class MailStore: ObservableObject {
                 messages[existingIndex].subject = item.subject
                 messages[existingIndex].preview = item.snippet
                 messages[existingIndex].body = item.body.isEmpty ? item.snippet : item.body
+                messages[existingIndex].htmlBody = item.htmlBody
                 messages[existingIndex].isRead = !item.isUnread
                 messages[existingIndex].isStarred = item.isStarred
                 messages[existingIndex].isImportant = item.isImportant
@@ -599,6 +604,7 @@ final class MailStore: ObservableObject {
                 subject: item.subject,
                 preview: item.snippet,
                 body: item.body.isEmpty ? item.snippet : item.body,
+                htmlBody: item.htmlBody,
                 isRead: !item.isUnread,
                 isStarred: item.isStarred,
                 isImportant: item.isImportant,

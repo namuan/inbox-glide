@@ -8,6 +8,7 @@ struct FastmailInboxMessage: Sendable {
     let subject: String
     let snippet: String
     let body: String
+    let htmlBody: String?
     let labels: [String]
     let isUnread: Bool
     let isStarred: Bool
@@ -217,6 +218,7 @@ final class FastmailService {
             subject: parsed.subject.isEmpty ? "(No Subject)" : parsed.subject,
             snippet: parsed.snippet,
             body: parsed.body,
+            htmlBody: parsed.htmlBody,
             labels: flags,
             isUnread: !flags.contains(where: { $0.caseInsensitiveCompare("\\Seen") == .orderedSame }),
             isStarred: flags.contains(where: { $0.caseInsensitiveCompare("\\Flagged") == .orderedSame }),
@@ -240,6 +242,7 @@ private struct FastmailParsedRFC822Message {
     let subject: String
     let date: Date?
     let body: String
+    let htmlBody: String?
 
     var snippet: String {
         body
@@ -261,9 +264,10 @@ private struct FastmailParsedRFC822Message {
         let subject = headers["subject"] ?? "(No Subject)"
         let date = parseDate(headers["date"])
 
+        let htmlBody = extractHTMLBody(from: bodyPart)
         let body: String
-        if bodyPart.contains("<html") || bodyPart.contains("<HTML") {
-            body = htmlToText(bodyPart)
+        if let htmlBody {
+            body = htmlToText(htmlBody)
         } else {
             body = bodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -273,7 +277,8 @@ private struct FastmailParsedRFC822Message {
             senderEmail: sender.email,
             subject: subject.trimmingCharacters(in: .whitespacesAndNewlines),
             date: date,
-            body: body
+            body: body,
+            htmlBody: htmlBody
         )
     }
 
@@ -331,5 +336,24 @@ private struct FastmailParsedRFC822Message {
             return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return html
+    }
+
+    private static func extractHTMLBody(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let range = trimmed.range(
+            of: "(?is)<html\\b[\\s\\S]*?</html>",
+            options: .regularExpression
+        ) {
+            return String(trimmed[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if trimmed.range(of: "(?is)<body\\b[\\s\\S]*?</body>", options: .regularExpression) != nil {
+            return trimmed
+        }
+        if trimmed.range(of: "(?i)</?[a-z][^>]*>", options: .regularExpression) != nil {
+            return trimmed
+        }
+        return nil
     }
 }
