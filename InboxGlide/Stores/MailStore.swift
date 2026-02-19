@@ -198,7 +198,7 @@ final class MailStore: ObservableObject {
             provider: provider,
             displayName: cleanedName,
             emailAddress: cleanedEmail,
-            colorHex: nextColorHex(for: provider)
+            colorHex: nextColorHex()
         )
         accounts.append(account)
         logger.info(
@@ -713,19 +713,15 @@ final class MailStore: ObservableObject {
         return nil
     }
 
-    private func nextColorHex(for provider: MailProvider) -> String {
+    private func nextColorHex() -> String {
         let palette = [
             "#2563EB", "#16A34A", "#F97316", "#DC2626", "#0EA5E9",
             "#D97706", "#7C3AED", "#0891B2", "#BE123C", "#059669"
         ]
 
-        let usedForProvider = Set(
-            accounts
-                .filter { $0.provider == provider }
-                .map(\.colorHex)
-        )
+        let usedColors = Set(accounts.map(\.colorHex))
 
-        if let firstUnused = palette.first(where: { !usedForProvider.contains($0) }) {
+        if let firstUnused = palette.first(where: { !usedColors.contains($0) }) {
             return firstUnused
         }
 
