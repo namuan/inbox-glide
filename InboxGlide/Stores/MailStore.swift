@@ -70,13 +70,14 @@ final class MailStore: ObservableObject {
 
     private let preferences: PreferencesStore
     private let networkMonitor: NetworkMonitor
-    private let secureStore: SecureStore
     private let gmailAuthStore: GmailAuthStore
     private let yahooService: YahooService
     private let yahooCredentialsStore: YahooCredentialsStore
     private let fastmailService: FastmailService
     private let fastmailCredentialsStore: FastmailCredentialsStore
     private let logger = AppLogger.shared
+    private let appName = "InboxGlide"
+    private let storeFileName = "store.json"
 
     private var saveWorkItem: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "InboxGlide.MailStore.Save", qos: .utility)
@@ -87,10 +88,9 @@ final class MailStore: ObservableObject {
     private var yahooSyncInProgressEmails: Set<String> = []
     private var fastmailSyncInProgressEmails: Set<String> = []
 
-    init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore, gmailAuthStore: GmailAuthStore) {
+    init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
         self.networkMonitor = networkMonitor
-        self.secureStore = secureStore
         self.gmailAuthStore = gmailAuthStore
         self.yahooService = YahooService()
         self.yahooCredentialsStore = YahooCredentialsStore()
@@ -661,7 +661,7 @@ final class MailStore: ObservableObject {
         selectedAccountID = nil
         selectedCategory = nil
         deckMessageIDs = []
-        secureStore.deleteStoreFile()
+        deleteStoreFile()
     }
 
     func exportData(to url: URL) throws {
@@ -682,12 +682,19 @@ final class MailStore: ObservableObject {
     // MARK: - Internals
 
     private func loadOrBootstrap() {
-        if let snapshot = secureStore.load(StoreSnapshot.self) {
+        do {
+            let data = try Data(contentsOf: storeURL())
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let snapshot = try decoder.decode(StoreSnapshot.self, from: data)
             accounts = snapshot.accounts
             messages = snapshot.messages
             blockedSenders = snapshot.blockedSenders
             unsubscribedSenders = snapshot.unsubscribedSenders
             queuedActions = snapshot.queuedActions
+            logger.debug("Loaded local store snapshot from disk.", category: "MailStore")
+        } catch {
+            logger.debug("No local store snapshot loaded.", category: "MailStore", metadata: ["error": error.localizedDescription])
         }
         rebuildDeck()
     }
@@ -739,7 +746,28 @@ final class MailStore: ObservableObject {
             unsubscribedSenders: unsubscribedSenders,
             queuedActions: queuedActions
         )
-        secureStore.save(snapshot)
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(snapshot)
+            try data.write(to: storeURL(), options: [.atomic])
+        } catch {
+            logger.error("Failed to persist local store snapshot.", category: "MailStore", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    private func deleteStoreFile() {
+        do {
+            try FileManager.default.removeItem(at: storeURL())
+            logger.info("Deleted local store snapshot file.", category: "MailStore")
+        } catch {
+            logger.warning("Delete local store snapshot failed or file missing.", category: "MailStore", metadata: ["error": error.localizedDescription])
+        }
+    }
+
+    private func storeURL() throws -> URL {
+        let dir = try AppDirectories.applicationSupportDirectory(appName: appName)
+        return dir.appendingPathComponent(storeFileName, isDirectory: false)
     }
 
     private func apply(action: GlideAction, isSecondary: Bool, messageID: UUID) {
