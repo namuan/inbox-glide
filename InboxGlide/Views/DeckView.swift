@@ -154,10 +154,21 @@ struct DeckView: View {
             Text("All clear")
                 .font(.title2)
                 .fontWeight(.semibold)
-            Text("No emails in the current view.")
+            Text(emptyStateMessage)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateMessage: String {
+        if let selectedID = mailStore.selectedAccountID,
+           let account = mailStore.accounts.first(where: { $0.id == selectedID }),
+           account.provider == .yahoo {
+            return "No Yahoo emails in view. Use Settings > Accounts > Sync Yahoo Inbox to refresh."
+        }
+        return "No emails in the current view."
     }
 
     private func inferDirection(from translation: CGSize) -> GlideDirection? {

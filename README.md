@@ -14,7 +14,10 @@ This repo currently ships a local-first, offline-capable prototype:
 - Optional daily reminder notifications
 - Data export + delete-all
 
-Provider integrations (Gmail/Yahoo/Fastmail OAuth + sync) are stubbed for now; the app runs with local sample data so the UX can be exercised end-to-end.
+Provider integrations are in progress:
+- Gmail OAuth + inbox sync + provider delete
+- Yahoo app-password onboarding + IMAP inbox sync + provider delete
+- Fastmail remains stubbed
 
 ## Requirements
 

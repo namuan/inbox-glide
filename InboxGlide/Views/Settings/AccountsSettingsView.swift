@@ -11,7 +11,13 @@ struct AccountsSettingsView: View {
     @State private var email: String = ""
     @State private var accountPendingDeletion: MailAccount?
     @State private var isSyncingGmail: Bool = false
+    @State private var isSyncingYahoo: Bool = false
+    @State private var isShowingYahooSetup = false
+    @State private var yahooErrorMessage: String?
+    @State private var yahooInfoMessage: String?
+    @State private var yahooSyncStatus: String?
     private let logger = AppLogger.shared
+    private let yahooCredentialsStore = YahooCredentialsStore()
 
     var body: some View {
         Form {
@@ -86,6 +92,36 @@ struct AccountsSettingsView: View {
                         }
                     }
                 }
+
+                Button("Connect Yahoo") {
+                    isShowingYahooSetup = true
+                }
+                .buttonStyle(.bordered)
+
+                if hasYahooAccounts {
+                    Button("Sync Yahoo Inbox") {
+                        logger.info("Sync Yahoo Inbox button pressed.", category: "AccountsSettings")
+                        Task {
+                            await syncYahooInboxes()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSyncingYahoo)
+
+                    if isSyncingYahoo {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Syncing Yahoo inbox…")
+                                .foregroundStyle(.secondary)
+                        }
+                        if let yahooSyncStatus {
+                            Text(yahooSyncStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 
                 Divider()
 
@@ -131,6 +167,13 @@ struct AccountsSettingsView: View {
                 .environmentObject(mailStore)
             }
         }
+        .sheet(isPresented: $isShowingYahooSetup) {
+            YahooSetupSheet { displayName, emailAddress, appPassword in
+                Task {
+                    await connectYahoo(displayName: displayName, emailAddress: emailAddress, appPassword: appPassword)
+                }
+            }
+        }
         .alert(item: $accountPendingDeletion) { account in
             Alert(
                 title: Text("Delete Account"),
@@ -150,6 +193,26 @@ struct AccountsSettingsView: View {
             }
         } message: {
             Text(gmailAuth.authError ?? "Unable to connect Gmail.")
+        }
+        .alert("Yahoo Connection Failed", isPresented: Binding(
+            get: { yahooErrorMessage != nil },
+            set: { if !$0 { yahooErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                yahooErrorMessage = nil
+            }
+        } message: {
+            Text(yahooErrorMessage ?? "Unable to connect Yahoo.")
+        }
+        .alert("Yahoo Connected", isPresented: Binding(
+            get: { yahooInfoMessage != nil },
+            set: { if !$0 { yahooInfoMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                yahooInfoMessage = nil
+            }
+        } message: {
+            Text(yahooInfoMessage ?? "")
         }
     }
 
@@ -225,6 +288,148 @@ struct AccountsSettingsView: View {
         }
         return cleaned.capitalized
     }
+
+    private var hasYahooAccounts: Bool {
+        mailStore.accounts.contains(where: { $0.provider == .yahoo })
+    }
+
+    private func connectYahoo(displayName: String, emailAddress: String, appPassword: String) async {
+        let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedPassword = appPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanedEmail.isEmpty, !cleanedPassword.isEmpty else {
+            yahooErrorMessage = "Please enter your Yahoo email and app password."
+            return
+        }
+
+        do {
+            try yahooCredentialsStore.saveAppPassword(cleanedPassword, emailAddress: cleanedEmail)
+            let name = cleanedName.isEmpty ? defaultDisplayName(for: cleanedEmail) : cleanedName
+
+            let alreadyExists = mailStore.accounts.contains { account in
+                account.provider == .yahoo && account.emailAddress.caseInsensitiveCompare(cleanedEmail) == .orderedSame
+            }
+            if alreadyExists {
+                logger.info("Yahoo account already exists locally; refreshed saved app password only.", category: "AccountsSettings", metadata: ["email": cleanedEmail])
+                await syncYahooInbox(for: cleanedEmail)
+                return
+            }
+
+            mailStore.addAccount(
+                provider: .yahoo,
+                displayName: name,
+                emailAddress: cleanedEmail
+            )
+            logger.info("Added Yahoo account after app password setup.", category: "AccountsSettings", metadata: ["email": cleanedEmail])
+            await syncYahooInbox(for: cleanedEmail)
+        } catch {
+            yahooErrorMessage = error.localizedDescription
+            logger.error(
+                "Yahoo account setup failed.",
+                category: "AccountsSettings",
+                metadata: ["email": cleanedEmail, "error": error.localizedDescription]
+            )
+        }
+    }
+
+    private func syncYahooInboxes() async {
+        let yahooAccounts = mailStore.accounts.filter { $0.provider == .yahoo }
+        if yahooAccounts.isEmpty {
+            logger.warning("Yahoo sync requested, but no Yahoo accounts are configured.", category: "AccountsSettings")
+            return
+        }
+        if isSyncingYahoo {
+            logger.debug("Yahoo sync requested while another Yahoo sync is already running.", category: "AccountsSettings")
+            return
+        }
+
+        logger.info("Yahoo inbox sync requested from settings.", category: "AccountsSettings", metadata: ["accountCount": "\(yahooAccounts.count)"])
+
+        isSyncingYahoo = true
+        yahooSyncStatus = "Starting Yahoo sync…"
+        defer {
+            isSyncingYahoo = false
+            yahooSyncStatus = nil
+        }
+
+        var failures: [String] = []
+
+        for account in yahooAccounts {
+            do {
+                try await mailStore.syncYahooInboxProgressive(
+                    for: account.emailAddress,
+                    maxResults: 90,
+                    batchSize: 15
+                ) { cumulative, batchCount in
+                    DispatchQueue.main.async {
+                        yahooSyncStatus = "Yahoo \(account.emailAddress): +\(batchCount), \(cumulative) loaded"
+                    }
+                }
+                let count = mailStore.messages.filter {
+                    $0.accountID == account.id && $0.deletedAt == nil
+                }.count
+                logger.info(
+                    "Yahoo inbox sync completed from settings.",
+                    category: "AccountsSettings",
+                    metadata: ["email": account.emailAddress, "localCount": "\(count)"]
+                )
+            } catch {
+                failures.append("\(account.emailAddress): \(error.localizedDescription)")
+                logger.error(
+                    "Yahoo inbox sync failed from settings.",
+                    category: "AccountsSettings",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
+            }
+        }
+
+        if failures.isEmpty {
+            yahooInfoMessage = "Yahoo sync complete."
+        } else {
+            yahooErrorMessage = failures.joined(separator: "\n")
+        }
+    }
+
+    private func syncYahooInbox(for emailAddress: String) async {
+        if isSyncingYahoo {
+            logger.debug("Yahoo connect-triggered sync skipped because another Yahoo sync is running.", category: "AccountsSettings", metadata: ["email": emailAddress])
+            return
+        }
+        logger.info("Yahoo connect-triggered sync requested.", category: "AccountsSettings", metadata: ["email": emailAddress])
+
+        isSyncingYahoo = true
+        yahooSyncStatus = "Starting Yahoo sync…"
+        defer {
+            isSyncingYahoo = false
+            yahooSyncStatus = nil
+        }
+
+        do {
+            let fetched = try await mailStore.syncYahooInboxProgressive(
+                for: emailAddress,
+                maxResults: 90,
+                batchSize: 15
+            ) { cumulative, batchCount in
+                DispatchQueue.main.async {
+                    yahooSyncStatus = "Yahoo \(emailAddress): +\(batchCount), \(cumulative) loaded"
+                }
+            }
+            yahooInfoMessage = "Yahoo connected and inbox synced."
+            logger.info(
+                "Yahoo inbox sync completed after connect.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "fetched": "\(fetched)"]
+            )
+        } catch {
+            yahooErrorMessage = "Account saved, but inbox sync failed: \(error.localizedDescription)"
+            logger.error(
+                "Yahoo inbox sync failed after connect.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "error": error.localizedDescription]
+            )
+        }
+    }
 }
 
 private enum SetupFlow: String, Identifiable {
@@ -244,5 +449,51 @@ private extension Color {
         let g = Double((val >> 8) & 0xFF) / 255.0
         let b = Double(val & 0xFF) / 255.0
         self = Color(red: r, green: g, blue: b)
+    }
+}
+
+private struct YahooSetupSheet: View {
+    let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var displayName = ""
+    @State private var emailAddress = ""
+    @State private var appPassword = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Step 1: Generate Yahoo App Password") {
+                    Text("Open Yahoo Account Security and create an app password for InboxGlide.")
+                        .foregroundStyle(.secondary)
+                    Link("Open Yahoo Account Security", destination: URL(string: "https://login.yahoo.com/account/security")!)
+                }
+
+                Section("Step 2: Enter Account Details") {
+                    TextField("Yahoo email address", text: $emailAddress)
+                    TextField("Display name (optional)", text: $displayName)
+                    SecureField("Yahoo app password", text: $appPassword)
+                }
+
+                Section("Server Settings") {
+                    Text("IMAP: imap.mail.yahoo.com:993 (SSL)")
+                    Text("SMTP: smtp.mail.yahoo.com:465 or 587 (TLS)")
+                }
+            }
+            .navigationTitle("Connect Yahoo")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Connect") {
+                        onConnect(displayName, emailAddress, appPassword)
+                        dismiss()
+                    }
+                    .disabled(emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .frame(minWidth: 520, minHeight: 420)
     }
 }

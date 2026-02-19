@@ -72,18 +72,25 @@ final class MailStore: ObservableObject {
     private let networkMonitor: NetworkMonitor
     private let secureStore: SecureStore
     private let gmailAuthStore: GmailAuthStore
+    private let yahooService: YahooService
+    private let yahooCredentialsStore: YahooCredentialsStore
     private let logger = AppLogger.shared
 
     private var saveWorkItem: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "InboxGlide.MailStore.Save", qos: .utility)
     private var refreshTimer: Timer?
+    private var providerSyncTimer: Timer?
+    private var isBackgroundSyncInProgress = false
     private var pendingAdvanceMessageID: UUID?
+    private var yahooSyncInProgressEmails: Set<String> = []
 
     init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
         self.networkMonitor = networkMonitor
         self.secureStore = secureStore
         self.gmailAuthStore = gmailAuthStore
+        self.yahooService = YahooService()
+        self.yahooCredentialsStore = YahooCredentialsStore()
         logger.info("Initializing MailStore.", category: "MailStore")
 
         loadOrBootstrap()
@@ -91,10 +98,17 @@ final class MailStore: ObservableObject {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.rebuildDeck()
         }
+
+        providerSyncTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { [weak self] _ in
+            self?.triggerBackgroundProviderSync()
+        }
+
+        triggerBackgroundProviderSync()
     }
 
     deinit {
         refreshTimer?.invalidate()
+        providerSyncTimer?.invalidate()
     }
 
     var currentMessage: EmailMessage? {
@@ -207,6 +221,9 @@ final class MailStore: ObservableObject {
         if selectedAccountID == account.id {
             selectedAccountID = accounts.first?.id
         }
+        if account.provider == .yahoo {
+            try? yahooCredentialsStore.deleteAppPassword(emailAddress: account.emailAddress)
+        }
         scheduleSave()
         rebuildDeck()
     }
@@ -279,6 +296,162 @@ final class MailStore: ObservableObject {
         }
         logger.info(
             "Upserted Gmail messages.",
+            category: "MailStore",
+            metadata: [
+                "email": emailAddress,
+                "fetched": "\(items.count)",
+                "inserted": "\(inserted)",
+                "updated": "\(updated)"
+            ]
+        )
+        scheduleSave()
+        rebuildDeck()
+    }
+
+    func syncYahooInbox(for emailAddress: String, maxResults: Int = 30) async throws {
+        logger.info(
+            "Starting Yahoo sync (single-call wrapper).",
+            category: "MailStore",
+            metadata: ["email": emailAddress, "maxResults": "\(maxResults)"]
+        )
+        _ = try await syncYahooInboxProgressive(
+            for: emailAddress,
+            maxResults: maxResults,
+            batchSize: maxResults
+        )
+    }
+
+    @discardableResult
+    func syncYahooInboxProgressive(
+        for emailAddress: String,
+        maxResults: Int = 90,
+        batchSize: Int = 15,
+        onBatch: ((Int, Int) -> Void)? = nil
+    ) async throws -> Int {
+        let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if yahooSyncInProgressEmails.contains(normalizedEmail) {
+            logger.warning(
+                "Skipping Yahoo sync because one is already in progress for this account.",
+                category: "MailStore",
+                metadata: ["email": emailAddress]
+            )
+            return 0
+        }
+        yahooSyncInProgressEmails.insert(normalizedEmail)
+        defer { yahooSyncInProgressEmails.remove(normalizedEmail) }
+
+        logger.info(
+            "Starting Yahoo progressive sync.",
+            category: "MailStore",
+            metadata: [
+                "email": emailAddress,
+                "maxResults": "\(maxResults)",
+                "batchSize": "\(batchSize)"
+            ]
+        )
+        let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: emailAddress)
+        logger.debug(
+            "Loaded Yahoo app password from keychain for sync.",
+            category: "MailStore",
+            metadata: ["email": emailAddress]
+        )
+        let total = try await yahooService.fetchRecentInboxMessagesProgressive(
+            emailAddress: emailAddress,
+            appPassword: appPassword,
+            maxResults: maxResults,
+            batchSize: batchSize
+        ) { [weak self] cumulative, batchCount, messages in
+            guard let self else { return }
+            Task { @MainActor in
+                self.logger.debug(
+                    "Applying Yahoo sync batch to local store.",
+                    category: "MailStore",
+                    metadata: [
+                        "email": emailAddress,
+                        "batchCount": "\(batchCount)",
+                        "cumulative": "\(cumulative)"
+                    ]
+                )
+                self.upsertYahooMessages(for: emailAddress, items: messages)
+                onBatch?(cumulative, batchCount)
+            }
+        }
+        logger.info(
+            "Finished Yahoo progressive sync.",
+            category: "MailStore",
+            metadata: ["email": emailAddress, "totalFetched": "\(total)"]
+        )
+        return total
+    }
+
+    func upsertYahooMessages(for emailAddress: String, items: [YahooInboxMessage]) {
+        guard let account = accounts.first(where: {
+            $0.provider == .yahoo && $0.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
+        }) else {
+            logger.warning(
+                "Cannot upsert Yahoo messages because no matching account exists.",
+                category: "MailStore",
+                metadata: ["email": emailAddress]
+            )
+            return
+        }
+
+        var indexByProviderID: [String: Int] = [:]
+        for idx in messages.indices where messages[idx].accountID == account.id {
+            if let providerID = messages[idx].providerMessageID {
+                indexByProviderID[providerID] = idx
+            }
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for item in items {
+            if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].receivedAt = item.receivedAt
+                messages[existingIndex].senderName = item.senderName
+                messages[existingIndex].senderEmail = item.senderEmail
+                messages[existingIndex].subject = item.subject
+                messages[existingIndex].preview = item.snippet
+                messages[existingIndex].body = item.body.isEmpty ? item.snippet : item.body
+                messages[existingIndex].isRead = !item.isUnread
+                messages[existingIndex].isStarred = item.isStarred
+                messages[existingIndex].isImportant = item.isImportant
+                messages[existingIndex].labels = item.labels
+                messages[existingIndex].category = Self.category(for: item.labels)
+                updated += 1
+                continue
+            }
+
+            let message = EmailMessage(
+                id: UUID(),
+                accountID: account.id,
+                providerMessageID: item.id,
+                receivedAt: item.receivedAt,
+                senderName: item.senderName,
+                senderEmail: item.senderEmail,
+                subject: item.subject,
+                preview: item.snippet,
+                body: item.body.isEmpty ? item.snippet : item.body,
+                isRead: !item.isUnread,
+                isStarred: item.isStarred,
+                isImportant: item.isImportant,
+                labels: item.labels,
+                archivedAt: nil,
+                deletedAt: nil,
+                snoozedUntil: nil,
+                category: Self.category(for: item.labels)
+            )
+            messages.append(message)
+            indexByProviderID[item.id] = messages.count - 1
+            inserted += 1
+        }
+
+        if selectedAccountID == nil {
+            selectedAccountID = account.id
+        }
+        logger.info(
+            "Upserted Yahoo messages.",
             category: "MailStore",
             metadata: [
                 "email": emailAddress,
@@ -420,7 +593,7 @@ final class MailStore: ObservableObject {
             let message = messages[idx]
             messages[idx].deletedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
-            trashOnGmailIfPossible(message)
+            trashOnProviderIfPossible(message)
 
         case .archive:
             messages[idx].archivedAt = Date()
@@ -522,9 +695,72 @@ final class MailStore: ObservableObject {
         }
     }
 
-    private func trashOnGmailIfPossible(_ message: EmailMessage) {
+    private func triggerBackgroundProviderSync() {
+        guard networkMonitor.isOnline else { return }
+        logger.debug("Background provider sync tick triggered.", category: "MailStore")
+        Task { [weak self] in
+            await self?.runBackgroundProviderSync()
+        }
+    }
+
+    @MainActor
+    private func runBackgroundProviderSync() async {
+        if isBackgroundSyncInProgress { return }
+        isBackgroundSyncInProgress = true
+        defer { isBackgroundSyncInProgress = false }
+        logger.debug("Background provider sync started.", category: "MailStore")
+
+        await backgroundSyncGmailIfConnected()
+        await backgroundSyncYahooAccounts()
+        logger.debug("Background provider sync finished.", category: "MailStore")
+    }
+
+    @MainActor
+    private func backgroundSyncGmailIfConnected() async {
+        guard let emailAddress = gmailAuthStore.connectedEmail else { return }
+
+        do {
+            let items = try await gmailAuthStore.fetchRecentInboxMessages(maxResults: 30)
+            upsertGmailMessages(for: emailAddress, items: items)
+            logger.debug(
+                "Background Gmail sync completed.",
+                category: "MailStore",
+                metadata: ["email": emailAddress, "fetched": "\(items.count)"]
+            )
+        } catch {
+            logger.warning(
+                "Background Gmail sync failed.",
+                category: "MailStore",
+                metadata: ["email": emailAddress, "error": error.localizedDescription]
+            )
+        }
+    }
+
+    @MainActor
+    private func backgroundSyncYahooAccounts() async {
+        let yahooAccounts = accounts.filter { $0.provider == .yahoo }
+        guard !yahooAccounts.isEmpty else { return }
+
+        for account in yahooAccounts {
+            do {
+                try await syncYahooInbox(for: account.emailAddress, maxResults: 30)
+                logger.debug(
+                    "Background Yahoo sync completed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress]
+                )
+            } catch {
+                logger.warning(
+                    "Background Yahoo sync failed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
+            }
+        }
+    }
+
+    private func trashOnProviderIfPossible(_ message: EmailMessage) {
         guard let account = accounts.first(where: { $0.id == message.accountID }),
-              account.provider == .gmail,
               let providerMessageID = message.providerMessageID else {
             return
         }
@@ -532,28 +768,66 @@ final class MailStore: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await gmailAuthStore.trashMessage(id: providerMessageID)
-                logger.info(
-                    "Deleted Gmail message on provider.",
-                    category: "MailStore",
-                    metadata: ["messageID": providerMessageID, "email": account.emailAddress]
-                )
+                switch account.provider {
+                case .gmail:
+                    try await gmailAuthStore.trashMessage(id: providerMessageID)
+                    logger.info(
+                        "Deleted Gmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                case .yahoo:
+                    let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: account.emailAddress)
+                    try await yahooService.trashMessage(
+                        emailAddress: account.emailAddress,
+                        appPassword: appPassword,
+                        id: providerMessageID
+                    )
+                    logger.info(
+                        "Deleted Yahoo message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                case .fastmail:
+                    return
+                }
             } catch let gmailError as GmailServiceError where gmailError.statusCode == 404 {
                 logger.warning(
                     "Gmail message already missing on provider; treating local delete as complete.",
                     category: "MailStore",
                     metadata: ["messageID": providerMessageID, "email": account.emailAddress]
                 )
+            } catch let yahooError as YahooServiceError {
+                switch yahooError {
+                case .messageNotFound:
+                    logger.warning(
+                        "Yahoo message already missing on provider; treating local delete as complete.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                default:
+                    logger.error(
+                        "Failed deleting Yahoo message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "error": yahooError.localizedDescription]
+                    )
+                    await MainActor.run {
+                        self.errorAlert = ErrorAlert(
+                            title: "Yahoo Delete Failed",
+                            message: "Deleted locally, but Yahoo delete failed: \(yahooError.localizedDescription)"
+                        )
+                    }
+                }
             } catch {
                 logger.error(
-                    "Failed deleting Gmail message on provider.",
+                    "Failed deleting message on provider.",
                     category: "MailStore",
                     metadata: ["messageID": providerMessageID, "error": error.localizedDescription]
                 )
                 await MainActor.run {
                     self.errorAlert = ErrorAlert(
-                        title: "Gmail Delete Failed",
-                        message: "Deleted locally, but Gmail delete failed: \(error.localizedDescription)"
+                        title: "\(account.provider.displayName) Delete Failed",
+                        message: "Deleted locally, but provider delete failed: \(error.localizedDescription)"
                     )
                 }
             }
