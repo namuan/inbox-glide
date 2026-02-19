@@ -20,6 +20,15 @@ if [ ! -d "$PROJECT" ]; then
   fi
 fi
 
+echo "Cleaning previous $SCHEME build artifacts..."
+xcodebuild \
+  -project "$PROJECT" \
+  -scheme "$SCHEME" \
+  -configuration Release \
+  -destination "platform=macOS" \
+  -derivedDataPath "$DERIVED" \
+  clean
+
 echo "Building $SCHEME (Release)..."
 xcodebuild \
   -project "$PROJECT" \

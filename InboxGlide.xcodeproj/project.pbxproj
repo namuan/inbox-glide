@@ -18,7 +18,9 @@
 		4CC18CF0535343AE6EE9F885 /* MailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B597D048430A6634B70A88DB /* MailStore.swift */; };
 		4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BCA5D1AA98EB2D03736440 /* Account.swift */; };
 		51351536E1494BAC3550551E /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34AE5B8897D83A21595F3D08 /* AISettingsView.swift */; };
+		540A1B82B7DB249AE553FDCD /* YahooCredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */; };
 		64132B9CE1C376B7379F72F5 /* OAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1860A8F65B9134EB54FACE /* OAuthService.swift */; };
+		65E75CB532F210A695D57A77 /* YahooService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B8CFE31781BC4692469556 /* YahooService.swift */; };
 		75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8360FBCE436B4CF5619E663C /* RemindersService.swift */; };
 		7A271EDB20E0DE6F05A8B606 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */; };
 		7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */; };
@@ -41,6 +43,7 @@
 		D134A8568F066EEC20A52158 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AB28E7B63992D3F357DED8 /* AppLogger.swift */; };
 		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
 		D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */; };
+		DE60AFA389AD5506A2777B76 /* IMAPNativeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */; };
 		E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23857CF30A40C77CC197739A /* ActionPadView.swift */; };
 		F9832AE88CA249CADF5EDA5F /* ProviderInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */; };
 		FD98DE3669B0210DB36B57CC /* AccountSetupGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */; };
@@ -65,6 +68,7 @@
 		396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideAction.swift; sourceTree = "<group>"; };
 		3F8DBAD779AEDF5D7981DC50 /* GmailOAuthConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GmailOAuthConfig.swift; sourceTree = "<group>"; };
 		469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
+		4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YahooCredentialsStore.swift; sourceTree = "<group>"; };
 		5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		51BCA5D1AA98EB2D03736440 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		5249B7949750D086D8BF0389 /* GmailAuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GmailAuthStore.swift; sourceTree = "<group>"; };
@@ -83,8 +87,10 @@
 		B597D048430A6634B70A88DB /* MailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailStore.swift; sourceTree = "<group>"; };
 		B698A3E24B63937145B7550B /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
 		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
+		B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPNativeClient.swift; sourceTree = "<group>"; };
 		CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		E2B8CFE31781BC4692469556 /* YahooService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YahooService.swift; sourceTree = "<group>"; };
 		E75D43881315E441C67DCB2C /* AppConfig.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppConfig.xcconfig; sourceTree = "<group>"; };
 		F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideSettingsView.swift; sourceTree = "<group>"; };
 		FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailCardView.swift; sourceTree = "<group>"; };
@@ -122,6 +128,7 @@
 				05AB28E7B63992D3F357DED8 /* AppLogger.swift */,
 				3F8DBAD779AEDF5D7981DC50 /* GmailOAuthConfig.swift */,
 				9C973723FAC4B08C2C9F5A13 /* GmailService.swift */,
+				B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */,
 				86D5940FC4D29E44FECC0F18 /* Keychain.swift */,
 				858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */,
 				B698A3E24B63937145B7550B /* NotificationScheduler.swift */,
@@ -129,6 +136,8 @@
 				8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */,
 				8360FBCE436B4CF5619E663C /* RemindersService.swift */,
 				469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */,
+				4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */,
+				E2B8CFE31781BC4692469556 /* YahooService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -282,6 +291,7 @@
 				BB3299A6530C5E9DEAFBB9FF /* GmailAuthStore.swift in Sources */,
 				297C14DA4CE9641A2CBF200B /* GmailOAuthConfig.swift in Sources */,
 				8C06A70D1302DD9A3738A8AD /* GmailService.swift in Sources */,
+				DE60AFA389AD5506A2777B76 /* IMAPNativeClient.swift in Sources */,
 				81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */,
 				7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */,
 				0503EF347D265287730D48F3 /* Keychain.swift in Sources */,
@@ -302,6 +312,8 @@
 				03C61B8977224BB0E357D504 /* SecureStore.swift in Sources */,
 				424CB7AE37948A478716FC47 /* SettingsView.swift in Sources */,
 				3AE0EFCFF27DCB35A9E3FB5B /* SidebarView.swift in Sources */,
+				540A1B82B7DB249AE553FDCD /* YahooCredentialsStore.swift in Sources */,
+				65E75CB532F210A695D57A77 /* YahooService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
