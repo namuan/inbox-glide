@@ -30,6 +30,7 @@ struct InboxGlideApp: App {
     @StateObject private var reminders: RemindersService
     @StateObject private var notifications: NotificationScheduler
     @StateObject private var ai: AIReplyService
+    @StateObject private var summaries: EmailSummaryService
     @StateObject private var keyEvents: KeyEventMonitor
 
     init() {
@@ -52,6 +53,7 @@ struct InboxGlideApp: App {
         _reminders = StateObject(wrappedValue: RemindersService())
         _notifications = StateObject(wrappedValue: NotificationScheduler())
         _ai = StateObject(wrappedValue: AIReplyService())
+        _summaries = StateObject(wrappedValue: EmailSummaryService())
         _keyEvents = StateObject(wrappedValue: KeyEventMonitor())
 
         AppLogger.shared.info(
@@ -71,6 +73,7 @@ struct InboxGlideApp: App {
                 .environmentObject(reminders)
                 .environmentObject(notifications)
                 .environmentObject(ai)
+                .environmentObject(summaries)
                 .environmentObject(keyEvents)
                 .preferredColorScheme(preferences.preferredColorScheme)
         }
@@ -84,6 +87,7 @@ struct InboxGlideApp: App {
                 .environmentObject(reminders)
                 .environmentObject(notifications)
                 .environmentObject(ai)
+                .environmentObject(summaries)
         }
     }
 }

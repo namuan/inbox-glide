@@ -27,9 +27,11 @@
 		7BE4C15E54A067B57FE55504 /* PIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */; };
 		81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */; };
 		83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A700FED79871FF27D7C87E13 /* EmailMessage.swift */; };
+		8AE6CE9DDFC00E7A507C5441 /* EmailSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845D6D8568CE264D1513528D /* EmailSummaryService.swift */; };
 		8B3F2A7C577BA06E59D0124C /* GlideAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */; };
 		8C06A70D1302DD9A3738A8AD /* GmailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C973723FAC4B08C2C9F5A13 /* GmailService.swift */; };
 		97E64D58CE5E1F8DC2166D00 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3952EC5AFD37182DFA121778 /* PrivacySettingsView.swift */; };
+		99BBE1F2E373895DFA4FBEEA /* EmailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */; };
 		9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */; };
 		9CD969718268855C713DA7FB /* AIReplyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA36E03968A63874068B9F0 /* AIReplyService.swift */; };
 		A0CE54CA4C6904FFC192A011 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */; };
@@ -75,6 +77,7 @@
 		5AF7E24B6580EC6FEF659CAE /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderInstructionsView.swift; sourceTree = "<group>"; };
 		8360FBCE436B4CF5619E663C /* RemindersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersService.swift; sourceTree = "<group>"; };
+		845D6D8568CE264D1513528D /* EmailSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSummaryService.swift; sourceTree = "<group>"; };
 		858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		86D5940FC4D29E44FECC0F18 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDirectories.swift; sourceTree = "<group>"; };
@@ -88,6 +91,7 @@
 		B698A3E24B63937145B7550B /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
 		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
 		B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPNativeClient.swift; sourceTree = "<group>"; };
+		B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSummary.swift; sourceTree = "<group>"; };
 		CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E2B8CFE31781BC4692469556 /* YahooService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YahooService.swift; sourceTree = "<group>"; };
@@ -126,6 +130,7 @@
 				ACA36E03968A63874068B9F0 /* AIReplyService.swift */,
 				8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */,
 				05AB28E7B63992D3F357DED8 /* AppLogger.swift */,
+				845D6D8568CE264D1513528D /* EmailSummaryService.swift */,
 				3F8DBAD779AEDF5D7981DC50 /* GmailOAuthConfig.swift */,
 				9C973723FAC4B08C2C9F5A13 /* GmailService.swift */,
 				B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */,
@@ -178,6 +183,7 @@
 			children = (
 				51BCA5D1AA98EB2D03736440 /* Account.swift */,
 				A700FED79871FF27D7C87E13 /* EmailMessage.swift */,
+				B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */,
 				396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */,
 				B82E4899D71A77E2BF76C92A /* GlideDirection.swift */,
 				0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */,
@@ -285,6 +291,8 @@
 				129C9B0C4DE2533D63AC3EC5 /* DeckView.swift in Sources */,
 				9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */,
 				83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */,
+				99BBE1F2E373895DFA4FBEEA /* EmailSummary.swift in Sources */,
+				8AE6CE9DDFC00E7A507C5441 /* EmailSummaryService.swift in Sources */,
 				8B3F2A7C577BA06E59D0124C /* GlideAction.swift in Sources */,
 				10C3FC90601D60A18074A481 /* GlideDirection.swift in Sources */,
 				A63920E4B261CA85EDD61DDC /* GlideSettingsView.swift in Sources */,
