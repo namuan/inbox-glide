@@ -31,24 +31,51 @@ struct AccountsSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(mailStore.accounts) { account in
-                        HStack(alignment: .center, spacing: 12) {
-                            Circle()
-                                .fill(Color(hex: account.colorHex) ?? .accentColor)
-                                .frame(width: 10, height: 10)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.displayName)
-                                Text(account.emailAddress)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .center, spacing: 12) {
+                                Circle()
+                                    .fill(Color(hex: account.colorHex) ?? .accentColor)
+                                    .frame(width: 10, height: 10)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.displayName)
+                                    Text(account.emailAddress)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Sync") {
+                                    Task {
+                                        await syncConnectedAccount(account)
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(!canSync(account) || isSyncInProgress(for: account))
+                                Button(role: .destructive) {
+                                    accountPendingDeletion = account
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Delete \(account.displayName)")
                             }
-                            Spacer()
-                            Button(role: .destructive) {
-                                accountPendingDeletion = account
-                            } label: {
-                                Image(systemName: "trash")
+
+                            if account.provider == .gmail && isSyncingGmail {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text("Syncing inbox…")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else if account.provider == .yahoo && isSyncingYahoo {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text(yahooSyncStatus ?? "Syncing Yahoo inbox…")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("Delete \(account.displayName)")
                         }
                     }
                 }
@@ -74,23 +101,6 @@ struct AccountsSettingsView: View {
                     Label("Connected: \(connectedEmail)", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.subheadline)
-
-                    Button("Sync Gmail Inbox") {
-                        Task {
-                            await syncGmailInbox()
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isSyncingGmail)
-
-                    if isSyncingGmail {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Syncing inbox…")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
                 }
 
                 Button("Connect Yahoo") {
@@ -98,31 +108,6 @@ struct AccountsSettingsView: View {
                 }
                 .buttonStyle(.bordered)
 
-                if hasYahooAccounts {
-                    Button("Sync Yahoo Inbox") {
-                        logger.info("Sync Yahoo Inbox button pressed.", category: "AccountsSettings")
-                        Task {
-                            await syncYahooInboxes()
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isSyncingYahoo)
-
-                    if isSyncingYahoo {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Syncing Yahoo inbox…")
-                                .foregroundStyle(.secondary)
-                        }
-                        if let yahooSyncStatus {
-                            Text(yahooSyncStatus)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                
                 Divider()
 
                 Text("Other Providers")
@@ -222,9 +207,39 @@ struct AccountsSettingsView: View {
         email = ""
     }
 
+    private func canSync(_ account: MailAccount) -> Bool {
+        account.provider == .gmail || account.provider == .yahoo
+    }
+
+    private func isSyncInProgress(for account: MailAccount) -> Bool {
+        switch account.provider {
+        case .gmail:
+            return isSyncingGmail
+        case .yahoo:
+            return isSyncingYahoo
+        case .fastmail:
+            return false
+        }
+    }
+
+    private func syncConnectedAccount(_ account: MailAccount) async {
+        switch account.provider {
+        case .gmail:
+            await syncGmailInbox(for: account.emailAddress)
+        case .yahoo:
+            await syncYahooInbox(for: account.emailAddress)
+        case .fastmail:
+            logger.debug(
+                "Sync requested for unsupported provider.",
+                category: "AccountsSettings",
+                metadata: ["provider": account.provider.rawValue, "email": account.emailAddress]
+            )
+        }
+    }
+
     private func connectGmail() async {
         logger.info("User tapped Connect Gmail.", category: "AccountsSettings")
-        let connected = await gmailAuth.signIn()
+        let connected = await gmailAuth.signIn(forceAccountSelection: true)
         guard connected, let emailAddress = gmailAuth.connectedEmail else {
             logger.warning(
                 "Connect Gmail did not complete successfully.",
@@ -252,9 +267,9 @@ struct AccountsSettingsView: View {
         await syncGmailInbox()
     }
 
-    private func syncGmailInbox() async {
-        guard let emailAddress = gmailAuth.connectedEmail else {
-            logger.warning("Sync requested without connected Gmail email.", category: "AccountsSettings")
+    private func syncGmailInbox(for requestedEmail: String? = nil) async {
+        guard let emailAddress = requestedEmail ?? gmailAuth.connectedEmail else {
+            logger.warning("Sync requested without target Gmail email.", category: "AccountsSettings")
             return
         }
 
@@ -263,7 +278,18 @@ struct AccountsSettingsView: View {
         defer { isSyncingGmail = false }
 
         do {
-            let items = try await gmailAuth.fetchRecentInboxMessages(maxResults: 30)
+            let hasSession = await gmailAuth.hasSession(for: emailAddress)
+            if !hasSession {
+                gmailAuth.authError = "No Gmail session found for \(emailAddress). Use Connect Gmail to authorize it."
+                logger.warning(
+                    "Gmail sync requested for account without OAuth session.",
+                    category: "AccountsSettings",
+                    metadata: ["email": emailAddress]
+                )
+                return
+            }
+
+            let items = try await gmailAuth.fetchRecentInboxMessages(for: emailAddress, maxResults: 30)
             mailStore.upsertGmailMessages(for: emailAddress, items: items)
             logger.info(
                 "Gmail inbox sync completed from settings.",
@@ -287,10 +313,6 @@ struct AccountsSettingsView: View {
             return "Gmail"
         }
         return cleaned.capitalized
-    }
-
-    private var hasYahooAccounts: Bool {
-        mailStore.accounts.contains(where: { $0.provider == .yahoo })
     }
 
     private func connectYahoo(displayName: String, emailAddress: String, appPassword: String) async {
@@ -330,64 +352,6 @@ struct AccountsSettingsView: View {
                 category: "AccountsSettings",
                 metadata: ["email": cleanedEmail, "error": error.localizedDescription]
             )
-        }
-    }
-
-    private func syncYahooInboxes() async {
-        let yahooAccounts = mailStore.accounts.filter { $0.provider == .yahoo }
-        if yahooAccounts.isEmpty {
-            logger.warning("Yahoo sync requested, but no Yahoo accounts are configured.", category: "AccountsSettings")
-            return
-        }
-        if isSyncingYahoo {
-            logger.debug("Yahoo sync requested while another Yahoo sync is already running.", category: "AccountsSettings")
-            return
-        }
-
-        logger.info("Yahoo inbox sync requested from settings.", category: "AccountsSettings", metadata: ["accountCount": "\(yahooAccounts.count)"])
-
-        isSyncingYahoo = true
-        yahooSyncStatus = "Starting Yahoo sync…"
-        defer {
-            isSyncingYahoo = false
-            yahooSyncStatus = nil
-        }
-
-        var failures: [String] = []
-
-        for account in yahooAccounts {
-            do {
-                try await mailStore.syncYahooInboxProgressive(
-                    for: account.emailAddress,
-                    maxResults: 90,
-                    batchSize: 15
-                ) { cumulative, batchCount in
-                    DispatchQueue.main.async {
-                        yahooSyncStatus = "Yahoo \(account.emailAddress): +\(batchCount), \(cumulative) loaded"
-                    }
-                }
-                let count = mailStore.messages.filter {
-                    $0.accountID == account.id && $0.deletedAt == nil
-                }.count
-                logger.info(
-                    "Yahoo inbox sync completed from settings.",
-                    category: "AccountsSettings",
-                    metadata: ["email": account.emailAddress, "localCount": "\(count)"]
-                )
-            } catch {
-                failures.append("\(account.emailAddress): \(error.localizedDescription)")
-                logger.error(
-                    "Yahoo inbox sync failed from settings.",
-                    category: "AccountsSettings",
-                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
-                )
-            }
-        }
-
-        if failures.isEmpty {
-            yahooInfoMessage = "Yahoo sync complete."
-        } else {
-            yahooErrorMessage = failures.joined(separator: "\n")
         }
     }
 

@@ -717,22 +717,34 @@ final class MailStore: ObservableObject {
 
     @MainActor
     private func backgroundSyncGmailIfConnected() async {
-        guard let emailAddress = gmailAuthStore.connectedEmail else { return }
+        let gmailAccounts = accounts.filter { $0.provider == .gmail }
+        guard !gmailAccounts.isEmpty else { return }
 
-        do {
-            let items = try await gmailAuthStore.fetchRecentInboxMessages(maxResults: 30)
-            upsertGmailMessages(for: emailAddress, items: items)
-            logger.debug(
-                "Background Gmail sync completed.",
-                category: "MailStore",
-                metadata: ["email": emailAddress, "fetched": "\(items.count)"]
-            )
-        } catch {
-            logger.warning(
-                "Background Gmail sync failed.",
-                category: "MailStore",
-                metadata: ["email": emailAddress, "error": error.localizedDescription]
-            )
+        for account in gmailAccounts {
+            do {
+                let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
+                if !hasSession {
+                    logger.debug(
+                        "Skipping background Gmail sync: no OAuth session for account.",
+                        category: "MailStore",
+                        metadata: ["email": account.emailAddress]
+                    )
+                    continue
+                }
+                let items = try await gmailAuthStore.fetchRecentInboxMessages(for: account.emailAddress, maxResults: 30)
+                upsertGmailMessages(for: account.emailAddress, items: items)
+                logger.debug(
+                    "Background Gmail sync completed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "fetched": "\(items.count)"]
+                )
+            } catch {
+                logger.warning(
+                    "Background Gmail sync failed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
+            }
         }
     }
 
@@ -770,7 +782,7 @@ final class MailStore: ObservableObject {
             do {
                 switch account.provider {
                 case .gmail:
-                    try await gmailAuthStore.trashMessage(id: providerMessageID)
+                    try await gmailAuthStore.trashMessage(id: providerMessageID, for: account.emailAddress)
                     logger.info(
                         "Deleted Gmail message on provider.",
                         category: "MailStore",
