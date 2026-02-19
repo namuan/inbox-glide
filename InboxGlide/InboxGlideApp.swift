@@ -37,12 +37,10 @@ struct InboxGlideApp: App {
         AppLogger.shared.info("InboxGlide app initializing.", category: "AppLifecycle")
         let prefs = PreferencesStore()
         let network = NetworkMonitor()
-        let secureStore = SecureStore(appName: "InboxGlide")
         let gmailAuthStore = GmailAuthStore()
         let store = MailStore(
             preferences: prefs,
             networkMonitor: network,
-            secureStore: secureStore,
             gmailAuthStore: gmailAuthStore
         )
 

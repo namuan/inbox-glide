@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		03C61B8977224BB0E357D504 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */; };
 		0503EF347D265287730D48F3 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86D5940FC4D29E44FECC0F18 /* Keychain.swift */; };
 		0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FC14234670B98358BD37630 /* ReplyComposerView.swift */; };
 		10C3FC90601D60A18074A481 /* GlideDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82E4899D71A77E2BF76C92A /* GlideDirection.swift */; };
@@ -74,7 +73,6 @@
 		396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideAction.swift; sourceTree = "<group>"; };
 		3ADE7DDE77E2B324B643A4AF /* FastmailCredentialsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FastmailCredentialsStore.swift; sourceTree = "<group>"; };
 		3F8DBAD779AEDF5D7981DC50 /* GmailOAuthConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GmailOAuthConfig.swift; sourceTree = "<group>"; };
-		469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
 		4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YahooCredentialsStore.swift; sourceTree = "<group>"; };
 		5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		51BCA5D1AA98EB2D03736440 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -149,7 +147,6 @@
 				8DF39B9A576658B8977EEBB8 /* PIIScrubber.swift */,
 				211A3B65D6F08178366669BE /* ProviderAppPasswordVault.swift */,
 				8360FBCE436B4CF5619E663C /* RemindersService.swift */,
-				469DD5D1D1F06E188A3BFC75 /* SecureStore.swift */,
 				4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */,
 				E2B8CFE31781BC4692469556 /* YahooService.swift */,
 			);
@@ -329,7 +326,6 @@
 				75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */,
 				0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */,
 				FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */,
-				03C61B8977224BB0E357D504 /* SecureStore.swift in Sources */,
 				424CB7AE37948A478716FC47 /* SettingsView.swift in Sources */,
 				3AE0EFCFF27DCB35A9E3FB5B /* SidebarView.swift in Sources */,
 				540A1B82B7DB249AE553FDCD /* YahooCredentialsStore.swift in Sources */,
