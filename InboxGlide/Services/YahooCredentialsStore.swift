@@ -5,6 +5,8 @@ final class YahooCredentialsStore {
     private let legacyKeychain = Keychain(service: "InboxGlide.YahooAppPassword")
     private let logger = AppLogger.shared
     private let providerKey = "yahoo"
+    private let lock = NSLock()
+    private var legacyLookupExhaustedEmails: Set<String> = []
 
     func saveAppPassword(_ password: String, emailAddress: String) throws {
         let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -24,8 +26,19 @@ final class YahooCredentialsStore {
         do {
             return try vault.loadPassword(providerKey: providerKey, emailAddress: cleanedEmail)
         } catch KeychainError.itemNotFound {
+            if isLegacyLookupExhausted(for: cleanedEmail) {
+                throw KeychainError.itemNotFound
+            }
+
             // Migrate legacy per-provider keychain entries into unified vault.
-            let data = try legacyKeychain.readData(account: cleanedEmail)
+            let data: Data
+            do {
+                data = try legacyKeychain.readData(account: cleanedEmail)
+            } catch KeychainError.itemNotFound {
+                markLegacyLookupExhausted(for: cleanedEmail)
+                throw KeychainError.itemNotFound
+            }
+
             guard let password = String(data: data, encoding: .utf8), !password.isEmpty else {
                 throw OAuthServiceError.tokenExchangeFailed("Stored Yahoo app password is invalid.")
             }
@@ -39,10 +52,23 @@ final class YahooCredentialsStore {
         let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         try vault.deletePassword(providerKey: providerKey, emailAddress: cleanedEmail)
         try? legacyKeychain.deleteData(account: cleanedEmail)
+        markLegacyLookupExhausted(for: cleanedEmail)
         logger.info(
             "Deleted Yahoo app password from keychain.",
             category: "YahooAuth",
             metadata: ["email": cleanedEmail]
         )
+    }
+
+    private func isLegacyLookupExhausted(for email: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return legacyLookupExhaustedEmails.contains(email)
+    }
+
+    private func markLegacyLookupExhausted(for email: String) {
+        lock.lock()
+        legacyLookupExhaustedEmails.insert(email)
+        lock.unlock()
     }
 }
