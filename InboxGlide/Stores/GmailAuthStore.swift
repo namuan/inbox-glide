@@ -11,6 +11,11 @@ struct StoredGmailOAuthToken: Codable {
     var expiresAt: Date?
 }
 
+private struct StoredGmailOAuthSessionStore: Codable {
+    var tokensByEmail: [String: StoredGmailOAuthToken]
+    var lastConnectedEmail: String?
+}
+
 @MainActor
 final class GmailAuthStore: ObservableObject {
     @Published private(set) var isAuthenticated = false
@@ -19,13 +24,14 @@ final class GmailAuthStore: ObservableObject {
     @Published var authError: String?
 
     private let keychain = Keychain(service: "InboxGlide.GmailOAuth")
-    private let tokenAccount = "gmail.oauth.token"
+    private let sessionsAccount = "gmail.oauth.sessions.v2"
+    private let legacyTokenAccount = "gmail.oauth.token"
     private let oauthService: OAuthService?
     private let gmailService = GmailService()
     private let logger = AppLogger.shared
 
     private var cancellables = Set<AnyCancellable>()
-    private var token: StoredGmailOAuthToken?
+    private var tokensByEmail: [String: StoredGmailOAuthToken] = [:]
     private var hasAttemptedRestore = false
 
     init() {
@@ -58,10 +64,10 @@ final class GmailAuthStore: ObservableObject {
 
     }
 
-    func signIn() async -> Bool {
+    func signIn(forceAccountSelection: Bool = false) async -> Bool {
         logger.info("Gmail sign-in requested.", category: "GmailAuth")
         await restoreSessionIfNeeded()
-        if isAuthenticated, connectedEmail != nil {
+        if !forceAccountSelection, isAuthenticated, connectedEmail != nil {
             authError = nil
             logger.info("Using restored Gmail auth session; skipping OAuth flow.", category: "GmailAuth")
             return true
@@ -78,23 +84,28 @@ final class GmailAuthStore: ObservableObject {
 
         do {
             let tokenResponse = try await oauthService.startAuthorization()
-            let currentRefresh = token?.refreshToken
-
-            token = StoredGmailOAuthToken(
+            var token = StoredGmailOAuthToken(
                 accessToken: tokenResponse.accessToken,
-                refreshToken: tokenResponse.refreshToken ?? currentRefresh,
+                refreshToken: tokenResponse.refreshToken,
                 expiresAt: Self.expiryDate(from: tokenResponse.expiresIn)
             )
 
-            try persistToken()
-            try await loadProfileWithCurrentToken()
+            let profile = try await loadProfile(using: token.accessToken)
+            let normalizedEmail = Self.normalizeEmail(profile.emailAddress)
+
+            if token.refreshToken == nil {
+                token.refreshToken = tokensByEmail[normalizedEmail]?.refreshToken
+            }
+            tokensByEmail[normalizedEmail] = token
+            connectedEmail = profile.emailAddress
+            isAuthenticated = !tokensByEmail.isEmpty
+            try persistSessions()
 
             authError = nil
-            isAuthenticated = true
             logger.info(
                 "Gmail sign-in succeeded.",
                 category: "GmailAuth",
-                metadata: ["email": connectedEmail ?? "unknown"]
+                metadata: ["email": profile.emailAddress, "sessionCount": "\(tokensByEmail.count)"]
             )
             return true
         } catch {
@@ -109,30 +120,41 @@ final class GmailAuthStore: ObservableObject {
     }
 
     func signOut() {
-        logger.info("Gmail sign-out requested.", category: "GmailAuth")
-        token = nil
+        logger.info("Gmail sign-out requested (all sessions).", category: "GmailAuth")
+        tokensByEmail = [:]
         connectedEmail = nil
         isAuthenticated = false
         authError = nil
-        try? keychain.deleteData(account: tokenAccount)
-        logger.info("Stored Gmail token deleted from keychain.", category: "GmailAuth")
+        try? keychain.deleteData(account: sessionsAccount)
+        try? keychain.deleteData(account: legacyTokenAccount)
+        logger.info("Stored Gmail sessions deleted from keychain.", category: "GmailAuth")
     }
 
-    func fetchRecentInboxMessages(maxResults: Int = 25) async throws -> [GmailInboxMessage] {
+    func hasSession(for emailAddress: String) async -> Bool {
+        await restoreSessionIfNeeded()
+        let key = Self.normalizeEmail(emailAddress)
+        return tokensByEmail[key] != nil
+    }
+
+    func fetchRecentInboxMessages(for emailAddress: String, maxResults: Int = 25) async throws -> [GmailInboxMessage] {
         logger.info(
             "Fetching recent Gmail inbox messages through auth store.",
             category: "GmailAuth",
-            metadata: ["maxResults": "\(maxResults)"]
+            metadata: ["email": emailAddress, "maxResults": "\(maxResults)"]
         )
         await restoreSessionIfNeeded()
-        let accessToken = try await currentAccessToken()
+        let accessToken = try await currentAccessToken(for: emailAddress)
         return try await gmailService.fetchRecentInboxMessages(accessToken: accessToken, maxResults: maxResults)
     }
 
-    func trashMessage(id: String) async throws {
-        logger.info("Requesting Gmail message trash operation.", category: "GmailAuth", metadata: ["messageID": id])
+    func trashMessage(id: String, for emailAddress: String) async throws {
+        logger.info(
+            "Requesting Gmail message trash operation.",
+            category: "GmailAuth",
+            metadata: ["messageID": id, "email": emailAddress]
+        )
         await restoreSessionIfNeeded()
-        let accessToken = try await currentAccessToken()
+        let accessToken = try await currentAccessToken(for: emailAddress)
         try await gmailService.trashMessage(accessToken: accessToken, id: id)
     }
 
@@ -145,25 +167,20 @@ final class GmailAuthStore: ObservableObject {
     }
 
     private func restoreSessionIfPossible() async {
-        logger.info("Attempting to restore Gmail auth session.", category: "GmailAuth")
+        logger.info("Attempting to restore Gmail auth sessions.", category: "GmailAuth")
         do {
-            let data = try keychain.readData(account: tokenAccount)
-            token = try JSONDecoder().decode(StoredGmailOAuthToken.self, from: data)
-            try await loadProfileWithCurrentToken()
-            isAuthenticated = true
-            authError = nil
-            logger.info(
-                "Restored Gmail auth session from keychain.",
-                category: "GmailAuth",
-                metadata: ["email": connectedEmail ?? "unknown"]
-            )
+            try await restoreFromSessionStore()
         } catch KeychainError.itemNotFound {
-            isAuthenticated = false
-            logger.debug("No saved Gmail token found in keychain.", category: "GmailAuth")
+            await migrateLegacyTokenIfPossible()
         } catch {
             isAuthenticated = false
+            connectedEmail = nil
             authError = nil
-            logger.warning("Failed restoring Gmail session; continuing signed out.", category: "GmailAuth", metadata: ["error": error.localizedDescription])
+            logger.warning(
+                "Failed restoring Gmail sessions; continuing signed out.",
+                category: "GmailAuth",
+                metadata: ["error": error.localizedDescription]
+            )
         }
     }
 
@@ -173,18 +190,22 @@ final class GmailAuthStore: ObservableObject {
         await restoreSessionIfPossible()
     }
 
-    private func loadProfileWithCurrentToken() async throws {
-        logger.debug("Fetching Gmail profile with current token.", category: "GmailAuth")
-        let accessToken = try await currentAccessToken()
+    private func loadProfile(using accessToken: String) async throws -> GmailProfile {
+        logger.debug("Fetching Gmail profile with access token.", category: "GmailAuth")
         let profile = try await gmailService.fetchProfile(accessToken: accessToken)
-        connectedEmail = profile.emailAddress
         logger.info("Fetched Gmail profile.", category: "GmailAuth", metadata: ["email": profile.emailAddress])
+        return profile
     }
 
-    private func currentAccessToken() async throws -> String {
-        guard var token else {
-            logger.error("No token in memory when requesting access token.", category: "GmailAuth")
-            throw OAuthServiceError.tokenExchangeFailed("No Gmail token found.")
+    private func currentAccessToken(for emailAddress: String) async throws -> String {
+        let key = Self.normalizeEmail(emailAddress)
+        guard var token = tokensByEmail[key] else {
+            logger.error(
+                "No token in memory for requested Gmail account.",
+                category: "GmailAuth",
+                metadata: ["email": emailAddress]
+            )
+            throw OAuthServiceError.tokenExchangeFailed("No Gmail session found for \(emailAddress). Connect that Gmail account again.")
         }
 
         if let expiresAt = token.expiresAt, expiresAt > Date().addingTimeInterval(60) {
@@ -204,26 +225,110 @@ final class GmailAuthStore: ObservableObject {
         token.refreshToken = refreshed.refreshToken ?? refreshToken
         token.expiresAt = Self.expiryDate(from: refreshed.expiresIn)
 
-        self.token = token
-        try persistToken()
-        logger.info("Gmail access token refreshed and persisted.", category: "GmailAuth")
+        tokensByEmail[key] = token
+        connectedEmail = emailAddress
+        try persistSessions()
+        logger.info(
+            "Gmail access token refreshed and persisted.",
+            category: "GmailAuth",
+            metadata: ["email": emailAddress]
+        )
 
         return token.accessToken
     }
 
-    private func persistToken() throws {
-        guard let token else { return }
-        let data = try JSONEncoder().encode(token)
-        try keychain.upsertData(data, account: tokenAccount)
+    private func persistSessions() throws {
+        let store = StoredGmailOAuthSessionStore(
+            tokensByEmail: tokensByEmail,
+            lastConnectedEmail: connectedEmail.map(Self.normalizeEmail)
+        )
+        let data = try JSONEncoder().encode(store)
+        try keychain.upsertData(data, account: sessionsAccount)
         logger.debug(
-            "Persisted Gmail token to keychain.",
+            "Persisted Gmail sessions to keychain.",
             category: "GmailAuth",
-            metadata: ["hasRefreshToken": "\(token.refreshToken != nil)"]
+            metadata: ["sessionCount": "\(tokensByEmail.count)"]
         )
     }
 
     private static func expiryDate(from expiresIn: Int?) -> Date? {
         guard let seconds = expiresIn else { return nil }
         return Date().addingTimeInterval(TimeInterval(seconds))
+    }
+
+    private func restoreFromSessionStore() async throws {
+        let data = try keychain.readData(account: sessionsAccount)
+        let store = try JSONDecoder().decode(StoredGmailOAuthSessionStore.self, from: data)
+        tokensByEmail = store.tokensByEmail
+
+        if let last = store.lastConnectedEmail, tokensByEmail[last] != nil {
+            connectedEmail = last
+        } else {
+            connectedEmail = tokensByEmail.keys.sorted().first
+        }
+        isAuthenticated = !tokensByEmail.isEmpty
+        authError = nil
+        logger.info(
+            "Restored Gmail auth sessions from keychain.",
+            category: "GmailAuth",
+            metadata: ["sessionCount": "\(tokensByEmail.count)", "connectedEmail": connectedEmail ?? "none"]
+        )
+    }
+
+    private func migrateLegacyTokenIfPossible() async {
+        do {
+            let data = try keychain.readData(account: legacyTokenAccount)
+            var legacyToken = try JSONDecoder().decode(StoredGmailOAuthToken.self, from: data)
+            let accessToken = try await refreshedAccessTokenIfNeeded(&legacyToken)
+            let profile = try await loadProfile(using: accessToken)
+            let normalizedEmail = Self.normalizeEmail(profile.emailAddress)
+            tokensByEmail[normalizedEmail] = legacyToken
+            connectedEmail = normalizedEmail
+            isAuthenticated = true
+            authError = nil
+            try persistSessions()
+            try? keychain.deleteData(account: legacyTokenAccount)
+            logger.info(
+                "Migrated legacy Gmail token to multi-session storage.",
+                category: "GmailAuth",
+                metadata: ["email": normalizedEmail]
+            )
+        } catch KeychainError.itemNotFound {
+            tokensByEmail = [:]
+            connectedEmail = nil
+            isAuthenticated = false
+            authError = nil
+            logger.debug("No saved Gmail session found in keychain.", category: "GmailAuth")
+        } catch {
+            tokensByEmail = [:]
+            connectedEmail = nil
+            isAuthenticated = false
+            authError = nil
+            logger.warning(
+                "Failed migrating legacy Gmail token; continuing signed out.",
+                category: "GmailAuth",
+                metadata: ["error": error.localizedDescription]
+            )
+        }
+    }
+
+    private func refreshedAccessTokenIfNeeded(_ token: inout StoredGmailOAuthToken) async throws -> String {
+        if let expiresAt = token.expiresAt, expiresAt > Date().addingTimeInterval(60) {
+            return token.accessToken
+        }
+
+        guard let refreshToken = token.refreshToken,
+              let oauthService else {
+            throw OAuthServiceError.tokenExchangeFailed("Gmail token is expired and cannot be refreshed.")
+        }
+        let refreshed = try await oauthService.refreshAccessToken(refreshToken: refreshToken)
+        token.accessToken = refreshed.accessToken
+        token.refreshToken = refreshed.refreshToken ?? refreshToken
+        token.expiresAt = Self.expiryDate(from: refreshed.expiresIn)
+        return token.accessToken
+    }
+
+    private static func normalizeEmail(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
