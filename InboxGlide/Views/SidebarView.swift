@@ -12,10 +12,19 @@ struct SidebarView: View {
                     Button {
                         mailStore.selectedAccountID = nil
                     } label: {
-                        Label("All Accounts", systemImage: "tray")
+                        HStack(spacing: 8) {
+                            Label("Unified View", systemImage: "tray.full")
+                            Spacer()
+                            if mailStore.selectedAccountID == nil {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .accessibilityLabel("Unified View selected")
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .padding(.vertical, 4)
+                    .help("Show messages from all connected accounts")
                 }
             }
 

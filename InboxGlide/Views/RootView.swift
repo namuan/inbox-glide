@@ -15,6 +15,16 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                if preferences.unifiedInboxEnabled {
+                    Button {
+                        mailStore.selectedAccountID = nil
+                    } label: {
+                        Label("Unified View", systemImage: "tray.full")
+                    }
+                    .disabled(mailStore.selectedAccountID == nil)
+                    .help("Show messages from all connected accounts")
+                }
+
                 if networkMonitor.isOnline {
                     if mailStore.queuedActions.count > 0 {
                         Button {
