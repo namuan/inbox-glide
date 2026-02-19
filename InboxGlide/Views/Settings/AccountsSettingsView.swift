@@ -482,56 +482,172 @@ private extension Color {
 }
 
 private enum SetupSheetLayout {
-    static let minWidth: CGFloat = 560
-    static let idealWidth: CGFloat = 720
-    static let maxWidth: CGFloat = 920
-    static let minHeight: CGFloat = 430
-    static let idealHeight: CGFloat = 520
-    static let maxHeight: CGFloat = 700
+    static let minWidth: CGFloat = 620
+    static let idealWidth: CGFloat = 780
+    static let maxWidth: CGFloat = 980
+    static let minHeight: CGFloat = 520
+    static let idealHeight: CGFloat = 620
+    static let maxHeight: CGFloat = 760
+}
+
+private enum AppPasswordProviderSetup {
+    case yahoo
+    case fastmail
+
+    var displayName: String {
+        switch self {
+        case .yahoo: return "Yahoo Mail"
+        case .fastmail: return "FastMail"
+        }
+    }
+
+    var connectTitle: String {
+        switch self {
+        case .yahoo: return "Connect Yahoo"
+        case .fastmail: return "Connect FastMail"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .yahoo: return "envelope.badge"
+        case .fastmail: return "paperplane.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .yahoo: return Color.orange
+        case .fastmail: return Color.blue
+        }
+    }
+
+    var helperText: String {
+        switch self {
+        case .yahoo:
+            return "Use an app password from Yahoo Account Security. Your account password will not be accepted."
+        case .fastmail:
+            return "Use an app password from FastMail settings. Your account password will not be accepted."
+        }
+    }
+
+    var appPasswordURL: URL {
+        switch self {
+        case .yahoo:
+            return URL(string: "https://login.yahoo.com/account/security")!
+        case .fastmail:
+            return URL(string: "https://app.fastmail.com/settings/security/app-passwords")!
+        }
+    }
+
+    var appPasswordLinkTitle: String {
+        switch self {
+        case .yahoo: return "Open Yahoo Account Security"
+        case .fastmail: return "Open FastMail App Password Settings"
+        }
+    }
+
+    var appPasswordSteps: [String] {
+        switch self {
+        case .yahoo:
+            return [
+                "Go to Account Security.",
+                "Select Generate app password.",
+                "Create one for InboxGlide and copy it."
+            ]
+        case .fastmail:
+            return [
+                "Go to Settings > Privacy & Security > App Passwords.",
+                "Create a new password named InboxGlide.",
+                "Grant mail access and copy it."
+            ]
+        }
+    }
+
+    var emailPlaceholder: String {
+        switch self {
+        case .yahoo: return "Yahoo email address"
+        case .fastmail: return "FastMail email address"
+        }
+    }
+
+    var appPasswordPlaceholder: String {
+        switch self {
+        case .yahoo: return "Yahoo app password"
+        case .fastmail: return "FastMail app password"
+        }
+    }
+
+    var imapLine: String {
+        switch self {
+        case .yahoo: return "imap.mail.yahoo.com:993 (SSL)"
+        case .fastmail: return "imap.fastmail.com:993 (SSL)"
+        }
+    }
+
+    var smtpLine: String {
+        switch self {
+        case .yahoo: return "smtp.mail.yahoo.com:465 or 587 (TLS)"
+        case .fastmail: return "smtp.fastmail.com:465 or 587 (TLS)"
+        }
+    }
 }
 
 private struct YahooSetupSheet: View {
     let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
-    @Environment(\.dismiss) private var dismiss
 
+    var body: some View {
+        AppPasswordProviderSetupSheet(provider: .yahoo, onConnect: onConnect)
+    }
+}
+
+private struct FastmailSetupSheet: View {
+    let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
+
+    var body: some View {
+        AppPasswordProviderSetupSheet(provider: .fastmail, onConnect: onConnect)
+    }
+}
+
+private struct AppPasswordProviderSetupSheet: View {
+    let provider: AppPasswordProviderSetup
+    let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @State private var displayName = ""
     @State private var emailAddress = ""
     @State private var appPassword = ""
 
+    private var canConnect: Bool {
+        !emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Step 1: Generate Yahoo App Password") {
-                    Text("Open Yahoo Account Security and create an app password for InboxGlide.")
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(.secondary)
-                    Link("Open Yahoo Account Security", destination: URL(string: "https://login.yahoo.com/account/security")!)
-                }
+            VStack(spacing: 0) {
+                header
+                Divider()
 
-                Section("Step 2: Enter Account Details") {
-                    TextField("Yahoo email address", text: $emailAddress)
-                    TextField("Display name (optional)", text: $displayName)
-                    SecureField("Yahoo app password", text: $appPassword)
-                }
-
-                Section("Server Settings") {
-                    Text("IMAP: imap.mail.yahoo.com:993 (SSL)")
-                    Text("SMTP: smtp.mail.yahoo.com:465 or 587 (TLS)")
-                }
-            }
-            .navigationTitle("Connect Yahoo")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") {
-                        onConnect(displayName, emailAddress, appPassword)
-                        dismiss()
+                ScrollView {
+                    VStack(spacing: 18) {
+                        stepCard
+                        credentialsCard
+                        serverCard
                     }
-                    .disabled(emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding(24)
                 }
+
+                Divider()
+                footer
             }
+            .background(
+                LinearGradient(
+                    colors: [provider.tint.opacity(0.10), Color.clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         }
         .frame(
             minWidth: SetupSheetLayout.minWidth,
@@ -542,58 +658,122 @@ private struct YahooSetupSheet: View {
             maxHeight: SetupSheetLayout.maxHeight
         )
     }
-}
 
-private struct FastmailSetupSheet: View {
-    let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
-    @Environment(\.dismiss) private var dismiss
+    private var header: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: provider.systemImage)
+                .font(.title2.weight(.semibold))
+                .frame(width: 36, height: 36)
+                .background(provider.tint.opacity(0.2), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .foregroundStyle(provider.tint)
 
-    @State private var displayName = ""
-    @State private var emailAddress = ""
-    @State private var appPassword = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Step 1: Generate Fastmail App Password") {
-                    Text("Open Fastmail settings and create an app password for InboxGlide.")
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(.secondary)
-                    Link("Open Fastmail App Password Settings", destination: URL(string: "https://app.fastmail.com/settings/security/app-passwords")!)
-                }
-
-                Section("Step 2: Enter Account Details") {
-                    TextField("Fastmail email address", text: $emailAddress)
-                    TextField("Display name (optional)", text: $displayName)
-                    SecureField("Fastmail app password", text: $appPassword)
-                }
-
-                Section("Server Settings") {
-                    Text("IMAP: imap.fastmail.com:993 (SSL)")
-                    Text("SMTP: smtp.fastmail.com:465 or 587 (TLS)")
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(provider.connectTitle)
+                    .font(.title3.weight(.semibold))
+                Text("App-password setup")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .navigationTitle("Connect Fastmail")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") {
-                        onConnect(displayName, emailAddress, appPassword)
-                        dismiss()
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+    }
+
+    private var stepCard: some View {
+        setupCard(title: "Step 1. Create App Password", icon: "key.fill") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(provider.helperText)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Link(provider.appPasswordLinkTitle, destination: provider.appPasswordURL)
+                    .font(.subheadline.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(provider.appPasswordSteps.indices, id: \.self) { index in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("\(index + 1).")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(provider.tint)
+                                .frame(width: 14, alignment: .leading)
+                            Text(provider.appPasswordSteps[index])
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .disabled(emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
-        .frame(
-            minWidth: SetupSheetLayout.minWidth,
-            idealWidth: SetupSheetLayout.idealWidth,
-            maxWidth: SetupSheetLayout.maxWidth,
-            minHeight: SetupSheetLayout.minHeight,
-            idealHeight: SetupSheetLayout.idealHeight,
-            maxHeight: SetupSheetLayout.maxHeight
-        )
+    }
+
+    private var credentialsCard: some View {
+        setupCard(title: "Step 2. Enter Account Details", icon: "person.crop.circle.badge.checkmark") {
+            VStack(spacing: 12) {
+                TextField(provider.emailPlaceholder, text: $emailAddress)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Display name (optional)", text: $displayName)
+                    .textFieldStyle(.roundedBorder)
+                SecureField(provider.appPasswordPlaceholder, text: $appPassword)
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+
+    private var serverCard: some View {
+        setupCard(title: "Server Settings", icon: "network") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("IMAP")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(provider.tint)
+                        .frame(width: 42, alignment: .leading)
+                    Text(provider.imapLine)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    Text("SMTP")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(provider.tint)
+                        .frame(width: 42, alignment: .leading)
+                    Text(provider.smtpLine)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Button("Cancel") { dismiss() }
+            Spacer()
+            Button("Connect") {
+                onConnect(displayName, emailAddress, appPassword)
+                dismiss()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!canConnect)
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private func setupCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(provider.tint)
+                Text(title)
+                    .font(.headline)
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
