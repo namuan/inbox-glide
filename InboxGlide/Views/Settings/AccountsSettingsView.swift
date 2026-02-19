@@ -5,10 +5,6 @@ struct AccountsSettingsView: View {
     @EnvironmentObject private var mailStore: MailStore
     @EnvironmentObject private var gmailAuth: GmailAuthStore
 
-    @State private var setupFlow: SetupFlow?
-    @State private var provider: MailProvider = .gmail
-    @State private var displayName: String = ""
-    @State private var email: String = ""
     @State private var accountPendingDeletion: MailAccount?
     @State private var isSyncingGmail: Bool = false
     @State private var isSyncingYahoo: Bool = false
@@ -107,51 +103,10 @@ struct AccountsSettingsView: View {
                     isShowingYahooSetup = true
                 }
                 .buttonStyle(.bordered)
-
-                Divider()
-
-                Text("Other Providers")
-                    .font(.headline)
-                    .padding(.top, 8)
-
-                Button("Open Full Setup Guide") {
-                    setupFlow = .fullSetup
-                }
-                .buttonStyle(.bordered)
-                
-                Text("Quick Add (Advanced)")
-                    .font(.headline)
-                    .padding(.top, 8)
-                
-                Picker("Provider", selection: $provider) {
-                    ForEach(MailProvider.allCases) { p in
-                        Text(p.displayName).tag(p)
-                    }
-                }
-                TextField("Display name", text: $displayName)
-                TextField("Email address", text: $email)
-                Button("Add (Stub)") {
-                    addAccount()
-                }
-                .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Text("Gmail uses OAuth. Other providers are currently local setup stubs.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .navigationTitle("Accounts")
-        .sheet(item: $setupFlow) { flow in
-            switch flow {
-            case .fullSetup:
-                AccountSetupGuideView(
-                    onComplete: { setupFlow = nil },
-                    onBack: { setupFlow = nil }
-                )
-                .environmentObject(mailStore)
-            }
-        }
         .sheet(isPresented: $isShowingYahooSetup) {
             YahooSetupSheet { displayName, emailAddress, appPassword in
                 Task {
@@ -199,12 +154,6 @@ struct AccountsSettingsView: View {
         } message: {
             Text(yahooInfoMessage ?? "")
         }
-    }
-
-    private func addAccount() {
-        mailStore.addAccount(provider: provider, displayName: displayName, emailAddress: email)
-        displayName = ""
-        email = ""
     }
 
     private func canSync(_ account: MailAccount) -> Bool {
@@ -394,12 +343,6 @@ struct AccountsSettingsView: View {
             )
         }
     }
-}
-
-private enum SetupFlow: String, Identifiable {
-    case fullSetup
-
-    var id: String { rawValue }
 }
 
 private extension Color {
