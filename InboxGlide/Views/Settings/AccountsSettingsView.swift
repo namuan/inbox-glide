@@ -481,6 +481,15 @@ private extension Color {
     }
 }
 
+private enum SetupSheetLayout {
+    static let minWidth: CGFloat = 560
+    static let idealWidth: CGFloat = 720
+    static let maxWidth: CGFloat = 920
+    static let minHeight: CGFloat = 430
+    static let idealHeight: CGFloat = 520
+    static let maxHeight: CGFloat = 700
+}
+
 private struct YahooSetupSheet: View {
     let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -494,6 +503,7 @@ private struct YahooSetupSheet: View {
             Form {
                 Section("Step 1: Generate Yahoo App Password") {
                     Text("Open Yahoo Account Security and create an app password for InboxGlide.")
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.secondary)
                     Link("Open Yahoo Account Security", destination: URL(string: "https://login.yahoo.com/account/security")!)
                 }
@@ -523,7 +533,14 @@ private struct YahooSetupSheet: View {
                 }
             }
         }
-        .frame(minWidth: 520, minHeight: 420)
+        .frame(
+            minWidth: SetupSheetLayout.minWidth,
+            idealWidth: SetupSheetLayout.idealWidth,
+            maxWidth: SetupSheetLayout.maxWidth,
+            minHeight: SetupSheetLayout.minHeight,
+            idealHeight: SetupSheetLayout.idealHeight,
+            maxHeight: SetupSheetLayout.maxHeight
+        )
     }
 }
 
@@ -540,6 +557,7 @@ private struct FastmailSetupSheet: View {
             Form {
                 Section("Step 1: Generate Fastmail App Password") {
                     Text("Open Fastmail settings and create an app password for InboxGlide.")
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.secondary)
                     Link("Open Fastmail App Password Settings", destination: URL(string: "https://app.fastmail.com/settings/security/app-passwords")!)
                 }
@@ -569,6 +587,13 @@ private struct FastmailSetupSheet: View {
                 }
             }
         }
-        .frame(minWidth: 520, minHeight: 420)
+        .frame(
+            minWidth: SetupSheetLayout.minWidth,
+            idealWidth: SetupSheetLayout.idealWidth,
+            maxWidth: SetupSheetLayout.maxWidth,
+            minHeight: SetupSheetLayout.minHeight,
+            idealHeight: SetupSheetLayout.idealHeight,
+            maxHeight: SetupSheetLayout.maxHeight
+        )
     }
 }
