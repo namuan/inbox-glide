@@ -23,7 +23,8 @@ final class GmailAuthStore: ObservableObject {
     @Published private(set) var connectedEmail: String?
     @Published var authError: String?
 
-    private let keychain = Keychain(service: "InboxGlide.GmailOAuth")
+    private let vault = ProviderAppPasswordVault.shared
+    private let legacyKeychain = Keychain(service: "InboxGlide.GmailOAuth")
     private let sessionsAccount = "gmail.oauth.sessions.v2"
     private let legacyTokenAccount = "gmail.oauth.token"
     private let oauthService: OAuthService?
@@ -125,9 +126,10 @@ final class GmailAuthStore: ObservableObject {
         connectedEmail = nil
         isAuthenticated = false
         authError = nil
-        try? keychain.deleteData(account: sessionsAccount)
-        try? keychain.deleteData(account: legacyTokenAccount)
-        logger.info("Stored Gmail sessions deleted from keychain.", category: "GmailAuth")
+        try? vault.deleteValue(key: sessionsAccount)
+        try? legacyKeychain.deleteData(account: sessionsAccount)
+        try? legacyKeychain.deleteData(account: legacyTokenAccount)
+        logger.info("Stored Gmail sessions deleted from keychain vault.", category: "GmailAuth")
     }
 
     func hasSession(for emailAddress: String) async -> Bool {
@@ -171,6 +173,9 @@ final class GmailAuthStore: ObservableObject {
         do {
             try await restoreFromSessionStore()
         } catch KeychainError.itemNotFound {
+            if migrateLegacySessionStoreIfPossible() {
+                return
+            }
             await migrateLegacyTokenIfPossible()
         } catch {
             isAuthenticated = false
@@ -243,9 +248,10 @@ final class GmailAuthStore: ObservableObject {
             lastConnectedEmail: connectedEmail.map(Self.normalizeEmail)
         )
         let data = try JSONEncoder().encode(store)
-        try keychain.upsertData(data, account: sessionsAccount)
+        let encoded = data.base64EncodedString()
+        try vault.saveValue(encoded, key: sessionsAccount)
         logger.debug(
-            "Persisted Gmail sessions to keychain.",
+            "Persisted Gmail sessions to keychain vault.",
             category: "GmailAuth",
             metadata: ["sessionCount": "\(tokensByEmail.count)"]
         )
@@ -257,7 +263,10 @@ final class GmailAuthStore: ObservableObject {
     }
 
     private func restoreFromSessionStore() async throws {
-        let data = try keychain.readData(account: sessionsAccount)
+        let encoded = try vault.loadValue(key: sessionsAccount)
+        guard let data = Data(base64Encoded: encoded) else {
+            throw OAuthServiceError.tokenExchangeFailed("Stored Gmail session data is invalid.")
+        }
         let store = try JSONDecoder().decode(StoredGmailOAuthSessionStore.self, from: data)
         tokensByEmail = store.tokensByEmail
 
@@ -269,15 +278,47 @@ final class GmailAuthStore: ObservableObject {
         isAuthenticated = !tokensByEmail.isEmpty
         authError = nil
         logger.info(
-            "Restored Gmail auth sessions from keychain.",
+            "Restored Gmail auth sessions from keychain vault.",
             category: "GmailAuth",
             metadata: ["sessionCount": "\(tokensByEmail.count)", "connectedEmail": connectedEmail ?? "none"]
         )
     }
 
+    private func migrateLegacySessionStoreIfPossible() -> Bool {
+        do {
+            let data = try legacyKeychain.readData(account: sessionsAccount)
+            let store = try JSONDecoder().decode(StoredGmailOAuthSessionStore.self, from: data)
+            tokensByEmail = store.tokensByEmail
+            if let last = store.lastConnectedEmail, tokensByEmail[last] != nil {
+                connectedEmail = last
+            } else {
+                connectedEmail = tokensByEmail.keys.sorted().first
+            }
+            isAuthenticated = !tokensByEmail.isEmpty
+            authError = nil
+            try persistSessions()
+            try? legacyKeychain.deleteData(account: sessionsAccount)
+            logger.info(
+                "Migrated Gmail multi-session store into unified keychain vault.",
+                category: "GmailAuth",
+                metadata: ["sessionCount": "\(tokensByEmail.count)"]
+            )
+            return true
+        } catch KeychainError.itemNotFound {
+            return false
+        } catch {
+            logger.warning(
+                "Failed migrating legacy Gmail session store.",
+                category: "GmailAuth",
+                metadata: ["error": error.localizedDescription]
+            )
+            return false
+        }
+    }
+
     private func migrateLegacyTokenIfPossible() async {
         do {
-            let data = try keychain.readData(account: legacyTokenAccount)
+            let data = try legacyKeychain.readData(account: legacyTokenAccount)
             var legacyToken = try JSONDecoder().decode(StoredGmailOAuthToken.self, from: data)
             let accessToken = try await refreshedAccessTokenIfNeeded(&legacyToken)
             let profile = try await loadProfile(using: accessToken)
@@ -287,7 +328,7 @@ final class GmailAuthStore: ObservableObject {
             isAuthenticated = true
             authError = nil
             try persistSessions()
-            try? keychain.deleteData(account: legacyTokenAccount)
+            try? legacyKeychain.deleteData(account: legacyTokenAccount)
             logger.info(
                 "Migrated legacy Gmail token to multi-session storage.",
                 category: "GmailAuth",
