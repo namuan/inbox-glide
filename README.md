@@ -18,7 +18,7 @@ This repo currently ships a local-first, offline-capable prototype:
 Provider integrations are in progress:
 - Gmail OAuth + inbox sync + provider delete
 - Yahoo app-password onboarding + IMAP inbox sync + provider delete
-- Fastmail remains stubbed
+- Fastmail app-password onboarding + IMAP inbox sync + provider delete
 
 ## Requirements
 
