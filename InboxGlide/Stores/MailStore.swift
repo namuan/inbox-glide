@@ -74,6 +74,8 @@ final class MailStore: ObservableObject {
     private let gmailAuthStore: GmailAuthStore
     private let yahooService: YahooService
     private let yahooCredentialsStore: YahooCredentialsStore
+    private let fastmailService: FastmailService
+    private let fastmailCredentialsStore: FastmailCredentialsStore
     private let logger = AppLogger.shared
 
     private var saveWorkItem: DispatchWorkItem?
@@ -83,6 +85,7 @@ final class MailStore: ObservableObject {
     private var isBackgroundSyncInProgress = false
     private var pendingAdvanceMessageID: UUID?
     private var yahooSyncInProgressEmails: Set<String> = []
+    private var fastmailSyncInProgressEmails: Set<String> = []
 
     init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, secureStore: SecureStore, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
@@ -91,6 +94,8 @@ final class MailStore: ObservableObject {
         self.gmailAuthStore = gmailAuthStore
         self.yahooService = YahooService()
         self.yahooCredentialsStore = YahooCredentialsStore()
+        self.fastmailService = FastmailService()
+        self.fastmailCredentialsStore = FastmailCredentialsStore()
         logger.info("Initializing MailStore.", category: "MailStore")
 
         loadOrBootstrap()
@@ -221,8 +226,13 @@ final class MailStore: ObservableObject {
         if selectedAccountID == account.id {
             selectedAccountID = accounts.first?.id
         }
-        if account.provider == .yahoo {
+        switch account.provider {
+        case .yahoo:
             try? yahooCredentialsStore.deleteAppPassword(emailAddress: account.emailAddress)
+        case .fastmail:
+            try? fastmailCredentialsStore.deleteAppPassword(emailAddress: account.emailAddress)
+        case .gmail:
+            break
         }
         scheduleSave()
         rebuildDeck()
@@ -452,6 +462,162 @@ final class MailStore: ObservableObject {
         }
         logger.info(
             "Upserted Yahoo messages.",
+            category: "MailStore",
+            metadata: [
+                "email": emailAddress,
+                "fetched": "\(items.count)",
+                "inserted": "\(inserted)",
+                "updated": "\(updated)"
+            ]
+        )
+        scheduleSave()
+        rebuildDeck()
+    }
+
+    func syncFastmailInbox(for emailAddress: String, maxResults: Int = 30) async throws {
+        logger.info(
+            "Starting Fastmail sync (single-call wrapper).",
+            category: "MailStore",
+            metadata: ["email": emailAddress, "maxResults": "\(maxResults)"]
+        )
+        _ = try await syncFastmailInboxProgressive(
+            for: emailAddress,
+            maxResults: maxResults,
+            batchSize: maxResults
+        )
+    }
+
+    @discardableResult
+    func syncFastmailInboxProgressive(
+        for emailAddress: String,
+        maxResults: Int = 90,
+        batchSize: Int = 15,
+        onBatch: ((Int, Int) -> Void)? = nil
+    ) async throws -> Int {
+        let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if fastmailSyncInProgressEmails.contains(normalizedEmail) {
+            logger.warning(
+                "Skipping Fastmail sync because one is already in progress for this account.",
+                category: "MailStore",
+                metadata: ["email": emailAddress]
+            )
+            return 0
+        }
+        fastmailSyncInProgressEmails.insert(normalizedEmail)
+        defer { fastmailSyncInProgressEmails.remove(normalizedEmail) }
+
+        logger.info(
+            "Starting Fastmail progressive sync.",
+            category: "MailStore",
+            metadata: [
+                "email": emailAddress,
+                "maxResults": "\(maxResults)",
+                "batchSize": "\(batchSize)"
+            ]
+        )
+        let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: emailAddress)
+        logger.debug(
+            "Loaded Fastmail app password from keychain for sync.",
+            category: "MailStore",
+            metadata: ["email": emailAddress]
+        )
+        let total = try await fastmailService.fetchRecentInboxMessagesProgressive(
+            emailAddress: emailAddress,
+            appPassword: appPassword,
+            maxResults: maxResults,
+            batchSize: batchSize
+        ) { [weak self] cumulative, batchCount, messages in
+            guard let self else { return }
+            Task { @MainActor in
+                self.logger.debug(
+                    "Applying Fastmail sync batch to local store.",
+                    category: "MailStore",
+                    metadata: [
+                        "email": emailAddress,
+                        "batchCount": "\(batchCount)",
+                        "cumulative": "\(cumulative)"
+                    ]
+                )
+                self.upsertFastmailMessages(for: emailAddress, items: messages)
+                onBatch?(cumulative, batchCount)
+            }
+        }
+        logger.info(
+            "Finished Fastmail progressive sync.",
+            category: "MailStore",
+            metadata: ["email": emailAddress, "totalFetched": "\(total)"]
+        )
+        return total
+    }
+
+    func upsertFastmailMessages(for emailAddress: String, items: [FastmailInboxMessage]) {
+        guard let account = accounts.first(where: {
+            $0.provider == .fastmail && $0.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
+        }) else {
+            logger.warning(
+                "Cannot upsert Fastmail messages because no matching account exists.",
+                category: "MailStore",
+                metadata: ["email": emailAddress]
+            )
+            return
+        }
+
+        var indexByProviderID: [String: Int] = [:]
+        for idx in messages.indices where messages[idx].accountID == account.id {
+            if let providerID = messages[idx].providerMessageID {
+                indexByProviderID[providerID] = idx
+            }
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for item in items {
+            if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].receivedAt = item.receivedAt
+                messages[existingIndex].senderName = item.senderName
+                messages[existingIndex].senderEmail = item.senderEmail
+                messages[existingIndex].subject = item.subject
+                messages[existingIndex].preview = item.snippet
+                messages[existingIndex].body = item.body.isEmpty ? item.snippet : item.body
+                messages[existingIndex].isRead = !item.isUnread
+                messages[existingIndex].isStarred = item.isStarred
+                messages[existingIndex].isImportant = item.isImportant
+                messages[existingIndex].labels = item.labels
+                messages[existingIndex].category = Self.category(for: item.labels)
+                updated += 1
+                continue
+            }
+
+            let message = EmailMessage(
+                id: UUID(),
+                accountID: account.id,
+                providerMessageID: item.id,
+                receivedAt: item.receivedAt,
+                senderName: item.senderName,
+                senderEmail: item.senderEmail,
+                subject: item.subject,
+                preview: item.snippet,
+                body: item.body.isEmpty ? item.snippet : item.body,
+                isRead: !item.isUnread,
+                isStarred: item.isStarred,
+                isImportant: item.isImportant,
+                labels: item.labels,
+                archivedAt: nil,
+                deletedAt: nil,
+                snoozedUntil: nil,
+                category: Self.category(for: item.labels)
+            )
+            messages.append(message)
+            indexByProviderID[item.id] = messages.count - 1
+            inserted += 1
+        }
+
+        if selectedAccountID == nil {
+            selectedAccountID = account.id
+        }
+        logger.info(
+            "Upserted Fastmail messages.",
             category: "MailStore",
             metadata: [
                 "email": emailAddress,
@@ -712,6 +878,7 @@ final class MailStore: ObservableObject {
 
         await backgroundSyncGmailIfConnected()
         await backgroundSyncYahooAccounts()
+        await backgroundSyncFastmailAccounts()
         logger.debug("Background provider sync finished.", category: "MailStore")
     }
 
@@ -771,6 +938,29 @@ final class MailStore: ObservableObject {
         }
     }
 
+    @MainActor
+    private func backgroundSyncFastmailAccounts() async {
+        let fastmailAccounts = accounts.filter { $0.provider == .fastmail }
+        guard !fastmailAccounts.isEmpty else { return }
+
+        for account in fastmailAccounts {
+            do {
+                try await syncFastmailInbox(for: account.emailAddress, maxResults: 30)
+                logger.debug(
+                    "Background Fastmail sync completed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress]
+                )
+            } catch {
+                logger.warning(
+                    "Background Fastmail sync failed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
+            }
+        }
+    }
+
     private func trashOnProviderIfPossible(_ message: EmailMessage) {
         guard let account = accounts.first(where: { $0.id == message.accountID }),
               let providerMessageID = message.providerMessageID else {
@@ -801,7 +991,17 @@ final class MailStore: ObservableObject {
                         metadata: ["messageID": providerMessageID, "email": account.emailAddress]
                     )
                 case .fastmail:
-                    return
+                    let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: account.emailAddress)
+                    try await fastmailService.trashMessage(
+                        emailAddress: account.emailAddress,
+                        appPassword: appPassword,
+                        id: providerMessageID
+                    )
+                    logger.info(
+                        "Deleted Fastmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
                 }
             } catch let gmailError as GmailServiceError where gmailError.statusCode == 404 {
                 logger.warning(
@@ -827,6 +1027,27 @@ final class MailStore: ObservableObject {
                         self.errorAlert = ErrorAlert(
                             title: "Yahoo Delete Failed",
                             message: "Deleted locally, but Yahoo delete failed: \(yahooError.localizedDescription)"
+                        )
+                    }
+                }
+            } catch let fastmailError as FastmailServiceError {
+                switch fastmailError {
+                case .messageNotFound:
+                    logger.warning(
+                        "Fastmail message already missing on provider; treating local delete as complete.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                default:
+                    logger.error(
+                        "Failed deleting Fastmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "error": fastmailError.localizedDescription]
+                    )
+                    await MainActor.run {
+                        self.errorAlert = ErrorAlert(
+                            title: "Fastmail Delete Failed",
+                            message: "Deleted locally, but Fastmail delete failed: \(fastmailError.localizedDescription)"
                         )
                     }
                 }

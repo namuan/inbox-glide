@@ -125,22 +125,22 @@ struct FastmailInstructions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             InstructionSection(
-                title: "Step 1: Choose Authentication Method",
-                icon: "person.badge.key",
-                content: "Fastmail supports both OAuth and app passwords. We recommend OAuth for the best security."
+                title: "Step 1: Generate App Password",
+                icon: "key.fill",
+                content: "Open Fastmail security settings and create an app password for InboxGlide."
             )
             
             InstructionSection(
-                title: "Step 2: OAuth Setup",
-                icon: "shield.checkered",
-                content: "Click 'Continue with Fastmail' to authorize InboxGlide through Fastmail's secure OAuth flow."
+                title: "Step 2: Connect in InboxGlide",
+                icon: "envelope.badge",
+                content: "Click 'Connect Fastmail' in Settings > Accounts, then enter your email address and app password."
             )
             
             Divider()
                 .padding(.vertical, 8)
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Alternative: App Password")
+                Text("Creating a Fastmail App Password")
                     .font(.headline)
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -159,11 +159,11 @@ struct FastmailInstructions: View {
                 HStack {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(.blue)
-                    Text("Fastmail Features")
+                    Text("Server Settings")
                         .font(.headline)
                 }
                 
-                Text("InboxGlide supports all Fastmail features including custom tags, aliases, and folders.")
+                Text("IMAP: imap.fastmail.com:993 (SSL), SMTP: smtp.fastmail.com:465 or 587 (TLS).")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

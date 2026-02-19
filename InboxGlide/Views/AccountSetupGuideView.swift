@@ -158,7 +158,7 @@ struct AccountSetupGuideView: View {
         case .yahoo:
             return "You'll authorize InboxGlide with your Yahoo account. You can use OAuth or generate an app-specific password."
         case .fastmail:
-            return "You'll connect to Fastmail using OAuth or an app password. We'll show you how to set this up."
+            return "You'll connect to Fastmail with an app password. We'll show you exactly where to generate it."
         }
     }
     

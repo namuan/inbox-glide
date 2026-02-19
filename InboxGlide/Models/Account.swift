@@ -11,7 +11,7 @@ enum MailProvider: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .gmail: return "Gmail"
         case .yahoo: return "Yahoo Mail"
-        case .fastmail: return "Fastmail"
+        case .fastmail: return "FastMail"
         }
     }
 

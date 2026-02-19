@@ -164,9 +164,15 @@ struct DeckView: View {
 
     private var emptyStateMessage: String {
         if let selectedID = mailStore.selectedAccountID,
-           let account = mailStore.accounts.first(where: { $0.id == selectedID }),
-           account.provider == .yahoo {
-            return "No Yahoo emails in view. Use Settings > Accounts > Sync Yahoo Inbox to refresh."
+           let account = mailStore.accounts.first(where: { $0.id == selectedID }) {
+            switch account.provider {
+            case .yahoo:
+                return "No Yahoo emails in view. Use Settings > Accounts > Sync Yahoo Inbox to refresh."
+            case .fastmail:
+                return "No Fastmail emails in view. Use Settings > Accounts > Sync Fastmail Inbox to refresh."
+            case .gmail:
+                break
+            }
         }
         return "No emails in the current view."
     }

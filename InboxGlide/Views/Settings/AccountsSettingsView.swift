@@ -8,12 +8,18 @@ struct AccountsSettingsView: View {
     @State private var accountPendingDeletion: MailAccount?
     @State private var isSyncingGmail: Bool = false
     @State private var isSyncingYahoo: Bool = false
+    @State private var isSyncingFastmail: Bool = false
     @State private var isShowingYahooSetup = false
+    @State private var isShowingFastmailSetup = false
     @State private var yahooErrorMessage: String?
     @State private var yahooInfoMessage: String?
     @State private var yahooSyncStatus: String?
+    @State private var fastmailErrorMessage: String?
+    @State private var fastmailInfoMessage: String?
+    @State private var fastmailSyncStatus: String?
     private let logger = AppLogger.shared
     private let yahooCredentialsStore = YahooCredentialsStore()
+    private let fastmailCredentialsStore = FastmailCredentialsStore()
 
     var body: some View {
         Form {
@@ -71,6 +77,14 @@ struct AccountsSettingsView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
+                            } else if account.provider == .fastmail && isSyncingFastmail {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text(fastmailSyncStatus ?? "Syncing Fastmail inbox…")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -103,6 +117,11 @@ struct AccountsSettingsView: View {
                     isShowingYahooSetup = true
                 }
                 .buttonStyle(.bordered)
+
+                Button("Connect Fastmail") {
+                    isShowingFastmailSetup = true
+                }
+                .buttonStyle(.bordered)
             }
         }
         .formStyle(.grouped)
@@ -111,6 +130,13 @@ struct AccountsSettingsView: View {
             YahooSetupSheet { displayName, emailAddress, appPassword in
                 Task {
                     await connectYahoo(displayName: displayName, emailAddress: emailAddress, appPassword: appPassword)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingFastmailSetup) {
+            FastmailSetupSheet { displayName, emailAddress, appPassword in
+                Task {
+                    await connectFastmail(displayName: displayName, emailAddress: emailAddress, appPassword: appPassword)
                 }
             }
         }
@@ -154,10 +180,30 @@ struct AccountsSettingsView: View {
         } message: {
             Text(yahooInfoMessage ?? "")
         }
+        .alert("Fastmail Connection Failed", isPresented: Binding(
+            get: { fastmailErrorMessage != nil },
+            set: { if !$0 { fastmailErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                fastmailErrorMessage = nil
+            }
+        } message: {
+            Text(fastmailErrorMessage ?? "Unable to connect Fastmail.")
+        }
+        .alert("Fastmail Connected", isPresented: Binding(
+            get: { fastmailInfoMessage != nil },
+            set: { if !$0 { fastmailInfoMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                fastmailInfoMessage = nil
+            }
+        } message: {
+            Text(fastmailInfoMessage ?? "")
+        }
     }
 
     private func canSync(_ account: MailAccount) -> Bool {
-        account.provider == .gmail || account.provider == .yahoo
+        account.provider == .gmail || account.provider == .yahoo || account.provider == .fastmail
     }
 
     private func isSyncInProgress(for account: MailAccount) -> Bool {
@@ -167,7 +213,7 @@ struct AccountsSettingsView: View {
         case .yahoo:
             return isSyncingYahoo
         case .fastmail:
-            return false
+            return isSyncingFastmail
         }
     }
 
@@ -178,11 +224,7 @@ struct AccountsSettingsView: View {
         case .yahoo:
             await syncYahooInbox(for: account.emailAddress)
         case .fastmail:
-            logger.debug(
-                "Sync requested for unsupported provider.",
-                category: "AccountsSettings",
-                metadata: ["provider": account.provider.rawValue, "email": account.emailAddress]
-            )
+            await syncFastmailInbox(for: account.emailAddress)
         }
     }
 
@@ -209,7 +251,7 @@ struct AccountsSettingsView: View {
 
         mailStore.addAccount(
             provider: .gmail,
-            displayName: defaultDisplayName(for: emailAddress),
+            displayName: defaultDisplayName(for: emailAddress, provider: .gmail),
             emailAddress: emailAddress
         )
         logger.info("Added Gmail account after successful OAuth connection.", category: "AccountsSettings", metadata: ["email": emailAddress])
@@ -255,11 +297,11 @@ struct AccountsSettingsView: View {
         }
     }
 
-    private func defaultDisplayName(for emailAddress: String) -> String {
-        let localPart = emailAddress.split(separator: "@").first.map(String.init) ?? "Gmail"
+    private func defaultDisplayName(for emailAddress: String, provider: MailProvider) -> String {
+        let localPart = emailAddress.split(separator: "@").first.map(String.init) ?? provider.displayName
         let cleaned = localPart.replacingOccurrences(of: ".", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         if cleaned.isEmpty {
-            return "Gmail"
+            return provider.displayName
         }
         return cleaned.capitalized
     }
@@ -276,7 +318,7 @@ struct AccountsSettingsView: View {
 
         do {
             try yahooCredentialsStore.saveAppPassword(cleanedPassword, emailAddress: cleanedEmail)
-            let name = cleanedName.isEmpty ? defaultDisplayName(for: cleanedEmail) : cleanedName
+            let name = cleanedName.isEmpty ? defaultDisplayName(for: cleanedEmail, provider: .yahoo) : cleanedName
 
             let alreadyExists = mailStore.accounts.contains { account in
                 account.provider == .yahoo && account.emailAddress.caseInsensitiveCompare(cleanedEmail) == .orderedSame
@@ -343,6 +385,86 @@ struct AccountsSettingsView: View {
             )
         }
     }
+
+    private func connectFastmail(displayName: String, emailAddress: String, appPassword: String) async {
+        let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedPassword = appPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanedEmail.isEmpty, !cleanedPassword.isEmpty else {
+            fastmailErrorMessage = "Please enter your Fastmail email and app password."
+            return
+        }
+
+        do {
+            try fastmailCredentialsStore.saveAppPassword(cleanedPassword, emailAddress: cleanedEmail)
+            let name = cleanedName.isEmpty ? defaultDisplayName(for: cleanedEmail, provider: .fastmail) : cleanedName
+
+            let alreadyExists = mailStore.accounts.contains { account in
+                account.provider == .fastmail && account.emailAddress.caseInsensitiveCompare(cleanedEmail) == .orderedSame
+            }
+            if alreadyExists {
+                logger.info("Fastmail account already exists locally; refreshed saved app password only.", category: "AccountsSettings", metadata: ["email": cleanedEmail])
+                await syncFastmailInbox(for: cleanedEmail)
+                return
+            }
+
+            mailStore.addAccount(
+                provider: .fastmail,
+                displayName: name,
+                emailAddress: cleanedEmail
+            )
+            logger.info("Added Fastmail account after app password setup.", category: "AccountsSettings", metadata: ["email": cleanedEmail])
+            await syncFastmailInbox(for: cleanedEmail)
+        } catch {
+            fastmailErrorMessage = error.localizedDescription
+            logger.error(
+                "Fastmail account setup failed.",
+                category: "AccountsSettings",
+                metadata: ["email": cleanedEmail, "error": error.localizedDescription]
+            )
+        }
+    }
+
+    private func syncFastmailInbox(for emailAddress: String) async {
+        if isSyncingFastmail {
+            logger.debug("Fastmail connect-triggered sync skipped because another Fastmail sync is running.", category: "AccountsSettings", metadata: ["email": emailAddress])
+            return
+        }
+        logger.info("Fastmail connect-triggered sync requested.", category: "AccountsSettings", metadata: ["email": emailAddress])
+
+        isSyncingFastmail = true
+        fastmailSyncStatus = "Starting Fastmail sync…"
+        defer {
+            isSyncingFastmail = false
+            fastmailSyncStatus = nil
+        }
+
+        do {
+            let fetched = try await mailStore.syncFastmailInboxProgressive(
+                for: emailAddress,
+                maxResults: 90,
+                batchSize: 15
+            ) { cumulative, batchCount in
+                DispatchQueue.main.async {
+                    fastmailSyncStatus = "Fastmail \(emailAddress): +\(batchCount), \(cumulative) loaded"
+                }
+            }
+            fastmailInfoMessage = "Fastmail connected and inbox synced."
+            logger.info(
+                "Fastmail inbox sync completed after connect.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "fetched": "\(fetched)"]
+            )
+        } catch {
+            fastmailErrorMessage = "Account saved, but inbox sync failed: \(error.localizedDescription)"
+            logger.error(
+                "Fastmail inbox sync failed after connect.",
+                category: "AccountsSettings",
+                metadata: ["email": emailAddress, "error": error.localizedDescription]
+            )
+        }
+    }
 }
 
 private extension Color {
@@ -388,6 +510,52 @@ private struct YahooSetupSheet: View {
                 }
             }
             .navigationTitle("Connect Yahoo")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Connect") {
+                        onConnect(displayName, emailAddress, appPassword)
+                        dismiss()
+                    }
+                    .disabled(emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .frame(minWidth: 520, minHeight: 420)
+    }
+}
+
+private struct FastmailSetupSheet: View {
+    let onConnect: (_ displayName: String, _ emailAddress: String, _ appPassword: String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var displayName = ""
+    @State private var emailAddress = ""
+    @State private var appPassword = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Step 1: Generate Fastmail App Password") {
+                    Text("Open Fastmail settings and create an app password for InboxGlide.")
+                        .foregroundStyle(.secondary)
+                    Link("Open Fastmail App Password Settings", destination: URL(string: "https://app.fastmail.com/settings/security/app-passwords")!)
+                }
+
+                Section("Step 2: Enter Account Details") {
+                    TextField("Fastmail email address", text: $emailAddress)
+                    TextField("Display name (optional)", text: $displayName)
+                    SecureField("Fastmail app password", text: $appPassword)
+                }
+
+                Section("Server Settings") {
+                    Text("IMAP: imap.fastmail.com:993 (SSL)")
+                    Text("SMTP: smtp.fastmail.com:465 or 587 (TLS)")
+                }
+            }
+            .navigationTitle("Connect Fastmail")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
