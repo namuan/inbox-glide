@@ -27,6 +27,7 @@ struct GmailInboxMessage: Sendable {
     let subject: String
     let snippet: String
     let body: String
+    let htmlBody: String?
     let labels: [String]
     let isUnread: Bool
     let isStarred: Bool
@@ -171,7 +172,7 @@ final class GmailService {
         let headers = message.payload?.headers ?? []
         let fromValue = Self.headerValue(name: "From", from: headers) ?? "Unknown <unknown@example.com>"
         let subject = Self.headerValue(name: "Subject", from: headers) ?? "(No Subject)"
-        let body = Self.extractBody(from: message.payload)
+        let extractedBody = Self.extractBody(from: message.payload)
 
         let sender = Self.parseFromHeader(fromValue)
         let receivedAt: Date
@@ -190,7 +191,8 @@ final class GmailService {
             senderEmail: sender.email,
             subject: subject,
             snippet: message.snippet ?? "",
-            body: body,
+            body: extractedBody.text,
+            htmlBody: extractedBody.html,
             labels: labels,
             isUnread: labels.contains("UNREAD"),
             isStarred: labels.contains("STARRED"),
@@ -214,21 +216,21 @@ final class GmailService {
         return (trimmed, trimmed.contains("@") ? trimmed : "unknown@example.com")
     }
 
-    private static func extractBody(from payload: GmailPayload?) -> String {
-        guard let payload else { return "" }
+    private static func extractBody(from payload: GmailPayload?) -> (text: String, html: String?) {
+        guard let payload else { return ("", nil) }
 
         var plainParts: [String] = []
         var htmlParts: [String] = []
         collectBodyParts(from: payload, plainParts: &plainParts, htmlParts: &htmlParts)
 
         if !plainParts.isEmpty {
-            return joinSections(plainParts)
+            return (joinSections(plainParts), joinSections(htmlParts).nilIfEmpty)
         }
         if !htmlParts.isEmpty {
-            let converted = htmlParts.map(htmlToText)
-            return joinSections(converted)
+            let html = joinSections(htmlParts)
+            return (htmlToText(html), html.nilIfEmpty)
         }
-        return ""
+        return ("", nil)
     }
 
     private static func collectBodyParts(from part: GmailPayload, plainParts: inout [String], htmlParts: inout [String]) {
@@ -284,6 +286,12 @@ final class GmailService {
             return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return html
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }
 

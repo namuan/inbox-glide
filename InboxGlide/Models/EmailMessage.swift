@@ -33,6 +33,7 @@ struct EmailMessage: Identifiable, Codable, Hashable {
     var subject: String
     var preview: String
     var body: String
+    var htmlBody: String? = nil
 
     var isRead: Bool
     var isStarred: Bool
