@@ -64,7 +64,7 @@ actor IMAPNativeClient: MailClient {
     private var receiveBuffer = Data()
     private var commandCounter = 1
     private var isConnected = false
-    private let commandTimeoutSeconds: Double = 20
+    private let commandTimeoutSeconds: Double = 35
 
     init(config: MailProviderConfig, credentials: IMAPCredentials) {
         self.config = config
@@ -172,7 +172,7 @@ actor IMAPNativeClient: MailClient {
 
     func fetchMessage(uid: String) async throws -> IMAPFetchedMessage {
         let startedAt = Date()
-        let raw = try await sendCommand("UID FETCH \(uid) (FLAGS INTERNALDATE BODY.PEEK[])")
+        let raw = try await fetchMessageRaw(uid: uid)
         let text = String(data: raw, encoding: .isoLatin1) ?? ""
 
         let flags = parseFlags(from: text)
@@ -204,6 +204,35 @@ actor IMAPNativeClient: MailClient {
             ]
         )
         return IMAPFetchedMessage(uid: uid, flags: flags, internalDate: internalDate, rawRFC822: rawMessage)
+    }
+
+    private func fetchMessageRaw(uid: String) async throws -> Data {
+        let primary = "UID FETCH \(uid) (FLAGS INTERNALDATE BODY.PEEK[])"
+        do {
+            return try await sendCommand(primary)
+        } catch let error as IMAPClientError {
+            if !isUnsupportedFetchVariant(error) {
+                throw error
+            }
+        }
+
+        let fallbackPeek = "UID FETCH \(uid) (FLAGS INTERNALDATE RFC822.PEEK)"
+        do {
+            return try await sendCommand(fallbackPeek)
+        } catch let error as IMAPClientError {
+            if !isUnsupportedFetchVariant(error) {
+                throw error
+            }
+        }
+
+        let legacy = "UID FETCH \(uid) (FLAGS INTERNALDATE RFC822)"
+        return try await sendCommand(legacy)
+    }
+
+    private func isUnsupportedFetchVariant(_ error: IMAPClientError) -> Bool {
+        guard case .protocolError(let message) = error else { return false }
+        let lowered = message.lowercased()
+        return lowered.contains("imap bad") || lowered.contains("unknown") || lowered.contains("parse")
     }
 
     func trashMessage(uid: String) async throws {

@@ -61,6 +61,7 @@ final class MailStore: ObservableObject {
     @Published private(set) var queuedActions: [QueuedMailAction] = []
     @Published private(set) var blockedSenders: Set<String> = []
     @Published private(set) var unsubscribedSenders: Set<String> = []
+    @Published private(set) var syncingProviders: Set<MailProvider> = []
 
     @Published var pendingConfirmation: PendingConfirmation? = nil
     @Published var prompt: MessagePrompt? = nil
@@ -84,10 +85,15 @@ final class MailStore: ObservableObject {
     private var refreshTimer: Timer?
     private var providerSyncTimer: Timer?
     private var isBackgroundSyncInProgress = false
+    private var lastProactiveSyncAt: Date = .distantPast
+    private var lastPeriodicSyncAt: Date = .distantPast
     private var pendingAdvanceMessageID: UUID?
     private var skippedMessageIDs: [UUID] = []
     private var yahooSyncInProgressEmails: Set<String> = []
     private var fastmailSyncInProgressEmails: Set<String> = []
+    private var syncProviderCounts: [MailProvider: Int] = [:]
+    private let lowDeckSyncThreshold = 16
+    private let proactiveSyncCooldown: TimeInterval = 45
 
     init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
@@ -105,8 +111,8 @@ final class MailStore: ObservableObject {
             self?.rebuildDeck()
         }
 
-        providerSyncTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { [weak self] _ in
-            self?.triggerBackgroundProviderSync()
+        providerSyncTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.maybeTriggerPeriodicSync()
         }
 
         triggerBackgroundProviderSync()
@@ -120,6 +126,17 @@ final class MailStore: ObservableObject {
     var currentMessage: EmailMessage? {
         guard let id = deckMessageIDs.first else { return nil }
         return messages.first(where: { $0.id == id })
+    }
+
+    var isSyncing: Bool {
+        !syncingProviders.isEmpty
+    }
+
+    var syncingProvidersLabel: String {
+        syncingProviders
+            .map(\.displayName)
+            .sorted()
+            .joined(separator: ", ")
     }
 
     func rebuildDeck() {
@@ -161,6 +178,8 @@ final class MailStore: ObservableObject {
                 deckMessageIDs.append(moved)
             }
         }
+
+        maybeTriggerLowDeckSync()
     }
 
     func performGlide(_ direction: GlideDirection, useSecondary: Bool) {
@@ -336,7 +355,7 @@ final class MailStore: ObservableObject {
         _ = try await syncYahooInboxProgressive(
             for: emailAddress,
             maxResults: maxResults,
-            batchSize: maxResults
+            batchSize: min(12, max(6, maxResults / 3))
         )
     }
 
@@ -347,6 +366,9 @@ final class MailStore: ObservableObject {
         batchSize: Int = 15,
         onBatch: ((Int, Int) -> Void)? = nil
     ) async throws -> Int {
+        await markSyncStarted(provider: .yahoo)
+        defer { Task { await self.markSyncFinished(provider: .yahoo) } }
+
         let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if yahooSyncInProgressEmails.contains(normalizedEmail) {
             logger.warning(
@@ -494,7 +516,7 @@ final class MailStore: ObservableObject {
         _ = try await syncFastmailInboxProgressive(
             for: emailAddress,
             maxResults: maxResults,
-            batchSize: maxResults
+            batchSize: min(12, max(6, maxResults / 3))
         )
     }
 
@@ -505,6 +527,9 @@ final class MailStore: ObservableObject {
         batchSize: Int = 15,
         onBatch: ((Int, Int) -> Void)? = nil
     ) async throws -> Int {
+        await markSyncStarted(provider: .fastmail)
+        defer { Task { await self.markSyncFinished(provider: .fastmail) } }
+
         let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if fastmailSyncInProgressEmails.contains(normalizedEmail) {
             logger.warning(
@@ -924,6 +949,45 @@ final class MailStore: ObservableObject {
         }
     }
 
+    private func maybeTriggerPeriodicSync() {
+        let interval = max(30, preferences.backgroundSyncIntervalSeconds)
+        guard Date().timeIntervalSince(lastPeriodicSyncAt) >= Double(interval) else { return }
+        lastPeriodicSyncAt = Date()
+        triggerBackgroundProviderSync()
+    }
+
+    private func maybeTriggerLowDeckSync() {
+        guard networkMonitor.isOnline else { return }
+        guard deckMessageIDs.count <= lowDeckSyncThreshold else { return }
+        guard Date().timeIntervalSince(lastProactiveSyncAt) >= proactiveSyncCooldown else { return }
+        lastProactiveSyncAt = Date()
+        logger.debug(
+            "Deck running low; triggering proactive provider sync.",
+            category: "MailStore",
+            metadata: ["deckCount": "\(deckMessageIDs.count)"]
+        )
+        triggerBackgroundProviderSync()
+    }
+
+    private func markSyncStarted(provider: MailProvider) async {
+        await MainActor.run {
+            syncProviderCounts[provider, default: 0] += 1
+            syncingProviders.insert(provider)
+        }
+    }
+
+    private func markSyncFinished(provider: MailProvider) async {
+        await MainActor.run {
+            let nextCount = max(0, (syncProviderCounts[provider] ?? 0) - 1)
+            if nextCount == 0 {
+                syncProviderCounts[provider] = nil
+                syncingProviders.remove(provider)
+            } else {
+                syncProviderCounts[provider] = nextCount
+            }
+        }
+    }
+
     @MainActor
     private func runBackgroundProviderSync() async {
         if isBackgroundSyncInProgress { return }
@@ -943,6 +1007,8 @@ final class MailStore: ObservableObject {
         guard !gmailAccounts.isEmpty else { return }
 
         for account in gmailAccounts {
+            await markSyncStarted(provider: .gmail)
+            defer { Task { await self.markSyncFinished(provider: .gmail) } }
             do {
                 let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
                 if !hasSession {
@@ -953,7 +1019,10 @@ final class MailStore: ObservableObject {
                     )
                     continue
                 }
-                let items = try await gmailAuthStore.fetchRecentInboxMessages(for: account.emailAddress, maxResults: 30)
+                let items = try await gmailAuthStore.fetchRecentInboxMessages(
+                    for: account.emailAddress,
+                    maxResults: max(10, min(200, preferences.backgroundGmailFetchCount))
+                )
                 upsertGmailMessages(for: account.emailAddress, items: items)
                 logger.debug(
                     "Background Gmail sync completed.",
@@ -977,7 +1046,10 @@ final class MailStore: ObservableObject {
 
         for account in yahooAccounts {
             do {
-                try await syncYahooInbox(for: account.emailAddress, maxResults: 30)
+                try await syncYahooInbox(
+                    for: account.emailAddress,
+                    maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                )
                 logger.debug(
                     "Background Yahoo sync completed.",
                     category: "MailStore",
@@ -1000,7 +1072,10 @@ final class MailStore: ObservableObject {
 
         for account in fastmailAccounts {
             do {
-                try await syncFastmailInbox(for: account.emailAddress, maxResults: 30)
+                try await syncFastmailInbox(
+                    for: account.emailAddress,
+                    maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                )
                 logger.debug(
                     "Background Fastmail sync completed.",
                     category: "MailStore",

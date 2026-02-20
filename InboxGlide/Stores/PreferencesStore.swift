@@ -98,6 +98,11 @@ final class PreferencesStore: ObservableObject {
         static let emailBodyDisplayMode = "appearance.emailBodyDisplayMode"
 
         static let unifiedInbox = "accounts.unifiedInbox"
+        static let backgroundSyncIntervalSeconds = "accounts.backgroundSyncIntervalSeconds"
+        static let backgroundGmailFetchCount = "accounts.backgroundGmailFetchCount"
+        static let backgroundIMAPFetchCount = "accounts.backgroundIMAPFetchCount"
+        static let connectSyncMaxResults = "accounts.connectSyncMaxResults"
+        static let connectSyncBatchSize = "accounts.connectSyncBatchSize"
         static let smartCategories = "inbox.smartCategories"
 
         static let dailyReminderEnabled = "notifications.daily.enabled"
@@ -134,6 +139,11 @@ final class PreferencesStore: ObservableObject {
     @Published var fontScale: Double { didSet { defaults.set(fontScale, forKey: Keys.fontScale) } }
 
     @Published var unifiedInboxEnabled: Bool { didSet { defaults.set(unifiedInboxEnabled, forKey: Keys.unifiedInbox) } }
+    @Published var backgroundSyncIntervalSeconds: Int { didSet { defaults.set(backgroundSyncIntervalSeconds, forKey: Keys.backgroundSyncIntervalSeconds) } }
+    @Published var backgroundGmailFetchCount: Int { didSet { defaults.set(backgroundGmailFetchCount, forKey: Keys.backgroundGmailFetchCount) } }
+    @Published var backgroundIMAPFetchCount: Int { didSet { defaults.set(backgroundIMAPFetchCount, forKey: Keys.backgroundIMAPFetchCount) } }
+    @Published var connectSyncMaxResults: Int { didSet { defaults.set(connectSyncMaxResults, forKey: Keys.connectSyncMaxResults) } }
+    @Published var connectSyncBatchSize: Int { didSet { defaults.set(connectSyncBatchSize, forKey: Keys.connectSyncBatchSize) } }
     @Published var smartCategoriesEnabled: Bool { didSet { defaults.set(smartCategoriesEnabled, forKey: Keys.smartCategories) } }
 
     @Published var dailyReminderEnabled: Bool { didSet { defaults.set(dailyReminderEnabled, forKey: Keys.dailyReminderEnabled) } }
@@ -179,6 +189,11 @@ final class PreferencesStore: ObservableObject {
         self.fontScale = defaults.object(forKey: Keys.fontScale) as? Double ?? 0
 
         self.unifiedInboxEnabled = defaults.object(forKey: Keys.unifiedInbox) as? Bool ?? true
+        self.backgroundSyncIntervalSeconds = defaults.object(forKey: Keys.backgroundSyncIntervalSeconds) as? Int ?? 90
+        self.backgroundGmailFetchCount = defaults.object(forKey: Keys.backgroundGmailFetchCount) as? Int ?? 60
+        self.backgroundIMAPFetchCount = defaults.object(forKey: Keys.backgroundIMAPFetchCount) as? Int ?? 45
+        self.connectSyncMaxResults = defaults.object(forKey: Keys.connectSyncMaxResults) as? Int ?? 24
+        self.connectSyncBatchSize = defaults.object(forKey: Keys.connectSyncBatchSize) as? Int ?? 6
         self.smartCategoriesEnabled = defaults.object(forKey: Keys.smartCategories) as? Bool ?? false
 
         self.dailyReminderEnabled = defaults.object(forKey: Keys.dailyReminderEnabled) as? Bool ?? false
