@@ -257,6 +257,7 @@ private struct ParsedRFC822Message {
         let separator = raw.range(of: "\r\n\r\n") ?? raw.range(of: "\n\n")
         let headerPart = separator.map { String(raw[..<$0.lowerBound]) } ?? raw
         let bodyPart = separator.map { String(raw[$0.upperBound...]) } ?? ""
+        let cleanedBodyPart = HTMLContentCleaner.cleanText(bodyPart)
 
         let headers = parseHeaders(from: headerPart)
         let fromRaw = headers["from"] ?? ""
@@ -264,12 +265,12 @@ private struct ParsedRFC822Message {
         let subject = headers["subject"] ?? "(No Subject)"
         let date = parseDate(headers["date"])
 
-        let htmlBody = extractHTMLBody(from: bodyPart)
+        let htmlBody = HTMLContentCleaner.sanitizeHTML(cleanedBodyPart)
         let body: String
         if let htmlBody {
-            body = htmlToText(htmlBody)
+            body = HTMLContentCleaner.extractDisplayText(fromHTML: htmlBody)
         } else {
-            body = bodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            body = cleanedBodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         return ParsedRFC822Message(
@@ -323,37 +324,4 @@ private struct ParsedRFC822Message {
         return formatter.date(from: raw)
     }
 
-    private static func htmlToText(_ html: String) -> String {
-        guard let data = html.data(using: .utf8) else { return html }
-        if let attributed = try? NSAttributedString(
-            data: data,
-            options: [
-                .documentType: NSAttributedString.DocumentType.html,
-                .characterEncoding: String.Encoding.utf8.rawValue
-            ],
-            documentAttributes: nil
-        ) {
-            return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return html
-    }
-
-    private static func extractHTMLBody(from raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if let range = trimmed.range(
-            of: "(?is)<html\\b[\\s\\S]*?</html>",
-            options: .regularExpression
-        ) {
-            return String(trimmed[range]).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        if trimmed.range(of: "(?is)<body\\b[\\s\\S]*?</body>", options: .regularExpression) != nil {
-            return trimmed
-        }
-        if trimmed.range(of: "(?i)</?[a-z][^>]*>", options: .regularExpression) != nil {
-            return trimmed
-        }
-        return nil
-    }
 }

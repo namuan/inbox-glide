@@ -32,6 +32,20 @@ enum CardDensity: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum EmailBodyDisplayMode: String, Codable, CaseIterable, Identifiable {
+    case renderedHTML
+    case parsedText
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .renderedHTML: return "Rendered HTML"
+        case .parsedText: return "Parsed Text"
+        }
+    }
+}
+
 enum AIMode: String, Codable, CaseIterable, Identifiable {
     case off
     case local
@@ -81,6 +95,7 @@ final class PreferencesStore: ObservableObject {
         static let appearanceMode = "appearance.mode"
         static let cardDensity = "appearance.cardDensity"
         static let fontScale = "appearance.fontScale"
+        static let emailBodyDisplayMode = "appearance.emailBodyDisplayMode"
 
         static let unifiedInbox = "accounts.unifiedInbox"
         static let smartCategories = "inbox.smartCategories"
@@ -113,6 +128,7 @@ final class PreferencesStore: ObservableObject {
 
     @Published var appearanceMode: AppearanceMode { didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) } }
     @Published var cardDensity: CardDensity { didSet { defaults.set(cardDensity.rawValue, forKey: Keys.cardDensity) } }
+    @Published var emailBodyDisplayMode: EmailBodyDisplayMode { didSet { defaults.set(emailBodyDisplayMode.rawValue, forKey: Keys.emailBodyDisplayMode) } }
 
     /// -2.0 ... +4.0 (roughly)
     @Published var fontScale: Double { didSet { defaults.set(fontScale, forKey: Keys.fontScale) } }
@@ -159,6 +175,7 @@ final class PreferencesStore: ObservableObject {
 
         self.appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system
         self.cardDensity = CardDensity(rawValue: defaults.string(forKey: Keys.cardDensity) ?? "") ?? .comfortable
+        self.emailBodyDisplayMode = EmailBodyDisplayMode(rawValue: defaults.string(forKey: Keys.emailBodyDisplayMode) ?? "") ?? .renderedHTML
         self.fontScale = defaults.object(forKey: Keys.fontScale) as? Double ?? 0
 
         self.unifiedInboxEnabled = defaults.object(forKey: Keys.unifiedInbox) as? Bool ?? true

@@ -20,6 +20,13 @@ struct AppearanceSettingsView: View {
                     }
                 }
 
+                Picker("Email body", selection: $preferences.emailBodyDisplayMode) {
+                    ForEach(EmailBodyDisplayMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 HStack {
                     Text("Font size")
                     Slider(value: $preferences.fontScale, in: -2...4, step: 1)

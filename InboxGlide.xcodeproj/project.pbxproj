@@ -36,12 +36,14 @@
 		A0CE54CA4C6904FFC192A011 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858E79DA2EAF64220ABEA197 /* NetworkMonitor.swift */; };
 		A169E5B90246D50AF08F110D /* ProviderAppPasswordVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211A3B65D6F08178366669BE /* ProviderAppPasswordVault.swift */; };
 		A63920E4B261CA85EDD61DDC /* GlideSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */; };
+		B1946A1222CE9477A19C5015 /* HTMLContentCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */; };
 		BB3299A6530C5E9DEAFBB9FF /* GmailAuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5249B7949750D086D8BF0389 /* GmailAuthStore.swift */; };
 		BE2B43948491FDBC0C0A674D /* AccountsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057220EE05EE73D78294259B /* AccountsSettingsView.swift */; };
 		BFE398328E776333F895DDDE /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */; };
 		BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */; };
 		C3786D52CBD436707DE65F21 /* PreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */; };
 		C54A19CB88E10B6684ADCFB7 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */; };
+		CD3761FF8B29DD29B9CA2AF5 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = AFF127296D88F7217FF82551 /* SwiftSoup */; };
 		CED50871B0C44A39422C692D /* FastmailCredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADE7DDE77E2B324B643A4AF /* FastmailCredentialsStore.swift */; };
 		D134A8568F066EEC20A52158 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AB28E7B63992D3F357DED8 /* AppLogger.swift */; };
 		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
@@ -62,6 +64,7 @@
 		05AB28E7B63992D3F357DED8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSetupGuideView.swift; sourceTree = "<group>"; };
 		0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedMailAction.swift; sourceTree = "<group>"; };
+		1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLContentCleaner.swift; sourceTree = "<group>"; };
 		1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxGlideApp.swift; sourceTree = "<group>"; };
 		211A3B65D6F08178366669BE /* ProviderAppPasswordVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderAppPasswordVault.swift; sourceTree = "<group>"; };
 		23857CF30A40C77CC197739A /* ActionPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionPadView.swift; sourceTree = "<group>"; };
@@ -104,6 +107,17 @@
 		FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailCardView.swift; sourceTree = "<group>"; };
 		FE1860A8F65B9134EB54FACE /* OAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1F682F2FE4FE98E4A68D46AB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD3761FF8B29DD29B9CA2AF5 /* SwiftSoup in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0665D4E18FAC3A19EC937B85 /* InboxGlide */ = {
@@ -210,6 +224,7 @@
 		CB8CCE09B1A460ADD341F6AF /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */,
 				2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */,
 			);
 			path = Utilities;
@@ -240,6 +255,7 @@
 			buildConfigurationList = 403253B74E90639BDB811889 /* Build configuration list for PBXNativeTarget "InboxGlide" */;
 			buildPhases = (
 				5D3F040B9002DEBBF0D22288 /* Sources */,
+				1F682F2FE4FE98E4A68D46AB /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -247,6 +263,7 @@
 			);
 			name = InboxGlide;
 			packageProductDependencies = (
+				AFF127296D88F7217FF82551 /* SwiftSoup */,
 			);
 			productName = InboxGlide;
 			productReference = 01B644598A77BA09E7C57A75 /* InboxGlide.app */;
@@ -271,6 +288,9 @@
 			);
 			mainGroup = D0FF8FCBF5F1E126B6810D7F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CE2C238A8DACE7D761CF9284 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -307,6 +327,7 @@
 				BB3299A6530C5E9DEAFBB9FF /* GmailAuthStore.swift in Sources */,
 				297C14DA4CE9641A2CBF200B /* GmailOAuthConfig.swift in Sources */,
 				8C06A70D1302DD9A3738A8AD /* GmailService.swift in Sources */,
+				B1946A1222CE9477A19C5015 /* HTMLContentCleaner.swift in Sources */,
 				DE60AFA389AD5506A2777B76 /* IMAPNativeClient.swift in Sources */,
 				81BD6A8952DF75AA97D2496C /* InboxGlideApp.swift in Sources */,
 				7A4B514B418B4A99113AA1AB /* KeyEventMonitor.swift in Sources */,
@@ -521,6 +542,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CE2C238A8DACE7D761CF9284 /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scinfu/SwiftSoup.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AFF127296D88F7217FF82551 /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE2C238A8DACE7D761CF9284 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C9E99D9B78DA089858294D9A /* Project object */;
 }
