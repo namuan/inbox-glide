@@ -17,6 +17,8 @@ struct AccountsSettingsView: View {
     @State private var fastmailErrorMessage: String?
     @State private var fastmailInfoMessage: String?
     @State private var fastmailSyncStatus: String?
+    @State private var providersPendingLocalStateClear: Set<MailProvider> = []
+    @State private var isConfirmingProviderLocalStateClear = false
     private let logger = AppLogger.shared
     private let yahooCredentialsStore = YahooCredentialsStore()
     private let fastmailCredentialsStore = FastmailCredentialsStore()
@@ -62,6 +64,33 @@ struct AccountsSettingsView: View {
                     in: 4...20,
                     step: 1
                 )
+            }
+
+            Section("Local State") {
+                Text("Remove downloaded messages and queued actions for selected providers. Connected accounts remain.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(MailProvider.allCases) { provider in
+                        let isSelected = providersPendingLocalStateClear.contains(provider)
+                        Button {
+                            if isSelected {
+                                providersPendingLocalStateClear.remove(provider)
+                            } else {
+                                providersPendingLocalStateClear.insert(provider)
+                            }
+                        } label: {
+                            Label(provider.displayName, systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                Button("Remove Local State for Selected Providers", role: .destructive) {
+                    isConfirmingProviderLocalStateClear = true
+                }
+                .disabled(providersPendingLocalStateClear.isEmpty)
             }
 
             Section("Connected Accounts") {
@@ -238,6 +267,19 @@ struct AccountsSettingsView: View {
             }
         } message: {
             Text(fastmailInfoMessage ?? "")
+        }
+        .confirmationDialog(
+            "Remove Local State",
+            isPresented: $isConfirmingProviderLocalStateClear,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                mailStore.clearLocalState(for: providersPendingLocalStateClear)
+                providersPendingLocalStateClear.removeAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes local messages and queued actions for: \(providersPendingLocalStateClear.map(\.displayName).sorted().joined(separator: ", ")).")
         }
     }
 
