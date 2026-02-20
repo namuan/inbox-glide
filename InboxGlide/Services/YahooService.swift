@@ -206,6 +206,26 @@ final class YahooService {
         }
     }
 
+    func archiveMessage(emailAddress: String, appPassword: String, id: String) async throws {
+        let credentials = IMAPCredentials(username: emailAddress, password: appPassword)
+        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
+        do {
+            try await client.connect()
+            defer { Task { await client.disconnect() } }
+            try await client.archiveMessage(
+                uid: id,
+                mailboxCandidates: ["Archive", "Archives", "INBOX.Archive", "INBOX.Archives"]
+            )
+            logger.info(
+                "Archived Yahoo message.",
+                category: "YahooAPI",
+                metadata: ["email": emailAddress, "messageID": id]
+            )
+        } catch let error as IMAPClientError {
+            throw mapIMAPError(error, messageID: id)
+        }
+    }
+
     private func parseYahooMessage(from fetched: IMAPFetchedMessage) -> YahooInboxMessage {
         let parsed = ParsedRFC822Message.parse(from: fetched.rawRFC822)
         let flags = fetched.flags

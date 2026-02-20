@@ -160,6 +160,17 @@ final class GmailAuthStore: ObservableObject {
         try await gmailService.trashMessage(accessToken: accessToken, id: id)
     }
 
+    func archiveMessage(id: String, for emailAddress: String) async throws {
+        logger.info(
+            "Requesting Gmail message archive operation.",
+            category: "GmailAuth",
+            metadata: ["messageID": id, "email": emailAddress]
+        )
+        await restoreSessionIfNeeded()
+        let accessToken = try await currentAccessToken(for: emailAddress)
+        try await gmailService.archiveMessage(accessToken: accessToken, id: id)
+    }
+
     private func handleRedirect(_ url: URL) {
         guard let oauthService else { return }
         Task {

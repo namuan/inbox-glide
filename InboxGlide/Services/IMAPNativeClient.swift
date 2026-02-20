@@ -25,6 +25,7 @@ protocol MailClient {
     func disconnect() async
     func fetchInboxUIDs(maxResults: Int, offset: Int) async throws -> [String]
     func fetchMessage(uid: String) async throws -> IMAPFetchedMessage
+    func archiveMessage(uid: String, mailboxCandidates: [String]) async throws
     func trashMessage(uid: String) async throws
 }
 
@@ -217,6 +218,30 @@ actor IMAPNativeClient: MailClient {
             }
             throw error
         }
+    }
+
+    func archiveMessage(uid: String, mailboxCandidates: [String]) async throws {
+        let candidates = mailboxCandidates.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !candidates.isEmpty else {
+            throw IMAPClientError.protocolError("No archive mailbox candidates provided.")
+        }
+
+        var lastError: Error?
+        for mailbox in candidates {
+            do {
+                _ = try await sendCommand("UID COPY \(uid) \(imapQuoted(mailbox))")
+                _ = try await sendCommand("UID STORE \(uid) +FLAGS.SILENT (\\Deleted)")
+                _ = try await sendCommand("EXPUNGE")
+                return
+            } catch {
+                lastError = error
+            }
+        }
+
+        if let lastError {
+            throw lastError
+        }
+        throw IMAPClientError.protocolError("Archiving failed for message \(uid).")
     }
 
     private func sendCommand(_ command: String) async throws -> Data {
