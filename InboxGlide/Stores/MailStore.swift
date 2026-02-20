@@ -800,9 +800,11 @@ final class MailStore: ObservableObject {
             trashOnProviderIfPossible(message)
 
         case .archive:
+            let message = messages[idx]
             messages[idx].archivedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
             clearSkippedState(for: messageID)
+            archiveOnProviderIfPossible(message)
 
         case .markRead:
             messages[idx].isRead = true
@@ -1114,6 +1116,112 @@ final class MailStore: ObservableObject {
                     self.errorAlert = ErrorAlert(
                         title: "\(account.provider.displayName) Delete Failed",
                         message: "Deleted locally, but provider delete failed: \(error.localizedDescription)"
+                    )
+                }
+            }
+        }
+    }
+
+    private func archiveOnProviderIfPossible(_ message: EmailMessage) {
+        guard let account = accounts.first(where: { $0.id == message.accountID }),
+              let providerMessageID = message.providerMessageID else {
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                switch account.provider {
+                case .gmail:
+                    try await gmailAuthStore.archiveMessage(id: providerMessageID, for: account.emailAddress)
+                    logger.info(
+                        "Archived Gmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                case .yahoo:
+                    let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: account.emailAddress)
+                    try await yahooService.archiveMessage(
+                        emailAddress: account.emailAddress,
+                        appPassword: appPassword,
+                        id: providerMessageID
+                    )
+                    logger.info(
+                        "Archived Yahoo message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                case .fastmail:
+                    let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: account.emailAddress)
+                    try await fastmailService.archiveMessage(
+                        emailAddress: account.emailAddress,
+                        appPassword: appPassword,
+                        id: providerMessageID
+                    )
+                    logger.info(
+                        "Archived Fastmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                }
+            } catch let gmailError as GmailServiceError where gmailError.statusCode == 404 {
+                logger.warning(
+                    "Gmail message already missing on provider during archive; treating local archive as complete.",
+                    category: "MailStore",
+                    metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                )
+            } catch let yahooError as YahooServiceError {
+                switch yahooError {
+                case .messageNotFound:
+                    logger.warning(
+                        "Yahoo message already missing on provider during archive; treating local archive as complete.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                default:
+                    logger.error(
+                        "Failed archiving Yahoo message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "error": yahooError.localizedDescription]
+                    )
+                    await MainActor.run {
+                        self.errorAlert = ErrorAlert(
+                            title: "Yahoo Archive Failed",
+                            message: "Archived locally, but Yahoo archive failed: \(yahooError.localizedDescription)"
+                        )
+                    }
+                }
+            } catch let fastmailError as FastmailServiceError {
+                switch fastmailError {
+                case .messageNotFound:
+                    logger.warning(
+                        "Fastmail message already missing on provider during archive; treating local archive as complete.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "email": account.emailAddress]
+                    )
+                default:
+                    logger.error(
+                        "Failed archiving Fastmail message on provider.",
+                        category: "MailStore",
+                        metadata: ["messageID": providerMessageID, "error": fastmailError.localizedDescription]
+                    )
+                    await MainActor.run {
+                        self.errorAlert = ErrorAlert(
+                            title: "Fastmail Archive Failed",
+                            message: "Archived locally, but Fastmail archive failed: \(fastmailError.localizedDescription)"
+                        )
+                    }
+                }
+            } catch {
+                logger.error(
+                    "Failed archiving message on provider.",
+                    category: "MailStore",
+                    metadata: ["messageID": providerMessageID, "error": error.localizedDescription]
+                )
+                await MainActor.run {
+                    self.errorAlert = ErrorAlert(
+                        title: "\(account.provider.displayName) Archive Failed",
+                        message: "Archived locally, but provider archive failed: \(error.localizedDescription)"
                     )
                 }
             }
