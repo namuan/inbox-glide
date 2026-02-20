@@ -39,6 +39,7 @@
 		B1946A1222CE9477A19C5015 /* HTMLContentCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */; };
 		BB3299A6530C5E9DEAFBB9FF /* GmailAuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5249B7949750D086D8BF0389 /* GmailAuthStore.swift */; };
 		BE2B43948491FDBC0C0A674D /* AccountsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057220EE05EE73D78294259B /* AccountsSettingsView.swift */; };
+		BF1E83FBB361FFAE8A947564 /* RFC822BodyExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11455E3F50FBC928910E972F /* RFC822BodyExtractor.swift */; };
 		BFE398328E776333F895DDDE /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028F2A1737840B8E47DA14F8 /* NotificationsSettingsView.swift */; };
 		BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */; };
 		C3786D52CBD436707DE65F21 /* PreferencesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */; };
@@ -64,6 +65,7 @@
 		05AB28E7B63992D3F357DED8 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSetupGuideView.swift; sourceTree = "<group>"; };
 		0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedMailAction.swift; sourceTree = "<group>"; };
+		11455E3F50FBC928910E972F /* RFC822BodyExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RFC822BodyExtractor.swift; sourceTree = "<group>"; };
 		1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLContentCleaner.swift; sourceTree = "<group>"; };
 		1E31CCCA602FC2FD489F027F /* InboxGlideApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxGlideApp.swift; sourceTree = "<group>"; };
 		211A3B65D6F08178366669BE /* ProviderAppPasswordVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderAppPasswordVault.swift; sourceTree = "<group>"; };
@@ -226,6 +228,7 @@
 			children = (
 				1B8B38DF27B5185C801104DC /* HTMLContentCleaner.swift */,
 				2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */,
+				11455E3F50FBC928910E972F /* RFC822BodyExtractor.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -344,6 +347,7 @@
 				A169E5B90246D50AF08F110D /* ProviderAppPasswordVault.swift in Sources */,
 				F9832AE88CA249CADF5EDA5F /* ProviderInstructionsView.swift in Sources */,
 				BFFB62DD21527E8175A8CC89 /* QueuedMailAction.swift in Sources */,
+				BF1E83FBB361FFAE8A947564 /* RFC822BodyExtractor.swift in Sources */,
 				75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */,
 				0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */,
 				FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */,

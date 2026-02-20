@@ -257,7 +257,6 @@ private struct FastmailParsedRFC822Message {
         let separator = raw.range(of: "\r\n\r\n") ?? raw.range(of: "\n\n")
         let headerPart = separator.map { String(raw[..<$0.lowerBound]) } ?? raw
         let bodyPart = separator.map { String(raw[$0.upperBound...]) } ?? ""
-        let cleanedBodyPart = HTMLContentCleaner.cleanText(bodyPart)
 
         let headers = parseHeaders(from: headerPart)
         let fromRaw = headers["from"] ?? ""
@@ -265,21 +264,15 @@ private struct FastmailParsedRFC822Message {
         let subject = headers["subject"] ?? "(No Subject)"
         let date = parseDate(headers["date"])
 
-        let htmlBody = HTMLContentCleaner.sanitizeHTML(cleanedBodyPart)
-        let body: String
-        if let htmlBody {
-            body = HTMLContentCleaner.extractDisplayText(fromHTML: htmlBody)
-        } else {
-            body = cleanedBodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        let extracted = RFC822BodyExtractor.extract(headers: headers, body: bodyPart)
 
         return FastmailParsedRFC822Message(
             senderName: sender.name,
             senderEmail: sender.email,
             subject: subject.trimmingCharacters(in: .whitespacesAndNewlines),
             date: date,
-            body: body,
-            htmlBody: htmlBody
+            body: extracted.text,
+            htmlBody: extracted.html
         )
     }
 
