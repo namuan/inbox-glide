@@ -85,6 +85,7 @@ final class MailStore: ObservableObject {
     private var providerSyncTimer: Timer?
     private var isBackgroundSyncInProgress = false
     private var pendingAdvanceMessageID: UUID?
+    private var skippedMessageIDs: [UUID] = []
     private var yahooSyncInProgressEmails: Set<String> = []
     private var fastmailSyncInProgressEmails: Set<String> = []
 
@@ -145,7 +146,13 @@ final class MailStore: ObservableObject {
             }
             .sorted(by: { $0.receivedAt > $1.receivedAt })
 
-        deckMessageIDs = visible.map { $0.id }
+        let visibleIDs = visible.map { $0.id }
+        let visibleSet = Set(visibleIDs)
+        skippedMessageIDs = skippedMessageIDs.filter { visibleSet.contains($0) }
+
+        let skippedSet = Set(skippedMessageIDs)
+        let unskipped = visibleIDs.filter { !skippedSet.contains($0) }
+        deckMessageIDs = unskipped + skippedMessageIDs
 
         if let pending = pendingAdvanceMessageID {
             pendingAdvanceMessageID = nil
@@ -789,11 +796,13 @@ final class MailStore: ObservableObject {
             let message = messages[idx]
             messages[idx].deletedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
             trashOnProviderIfPossible(message)
 
         case .archive:
             messages[idx].archivedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
 
         case .markRead:
             messages[idx].isRead = true
@@ -826,6 +835,7 @@ final class MailStore: ObservableObject {
             unsubscribedSenders.insert(sender)
             messages[idx].archivedAt = Date()
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
 
         case .unsubscribeAndDeleteAllFromSender:
             unsubscribedSenders.insert(sender)
@@ -852,14 +862,17 @@ final class MailStore: ObservableObject {
         case .snooze1h:
             messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60)
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
 
         case .snooze4h:
             messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60 * 4)
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
 
         case .snooze1d:
             messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60 * 24)
             deckMessageIDs.removeAll(where: { $0 == messageID })
+            clearSkippedState(for: messageID)
 
         case .createReminder:
             reminder = ReminderPresentation(messageID: messageID)
@@ -867,6 +880,7 @@ final class MailStore: ObservableObject {
             return
 
         case .skip:
+            markSkipped(messageID)
             advanceToNextMessage(after: messageID)
 
         case .reply:
@@ -889,6 +903,15 @@ final class MailStore: ObservableObject {
             deckMessageIDs.removeFirst()
             deckMessageIDs.append(first)
         }
+    }
+
+    private func markSkipped(_ messageID: UUID) {
+        skippedMessageIDs.removeAll(where: { $0 == messageID })
+        skippedMessageIDs.append(messageID)
+    }
+
+    private func clearSkippedState(for messageID: UUID) {
+        skippedMessageIDs.removeAll(where: { $0 == messageID })
     }
 
     private func triggerBackgroundProviderSync() {
