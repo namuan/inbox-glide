@@ -2,10 +2,6 @@ import Foundation
 import NaturalLanguage
 import SwiftUI
 
-#if canImport(AppKit)
-import AppKit
-#endif
-
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -160,30 +156,10 @@ actor EmailSummarizer {
     }
 
     private static func normalizedBody(_ body: String) -> String {
-        let strippedHTML = stripHTML(body)
-        return strippedHTML
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func stripHTML(_ value: String) -> String {
-        guard value.contains("<"), value.contains(">"), let data = value.data(using: .utf8) else {
-            return value
+        if HTMLContentCleaner.sanitizeHTML(body) != nil {
+            return HTMLContentCleaner.extractDisplayText(fromHTML: body)
         }
-        #if canImport(AppKit)
-        if let attributed = try? NSAttributedString(
-            data: data,
-            options: [
-                .documentType: NSAttributedString.DocumentType.html,
-                .characterEncoding: String.Encoding.utf8.rawValue
-            ],
-            documentAttributes: nil
-        ) {
-            return attributed.string
-        }
-        #endif
-        return value
+        return HTMLContentCleaner.cleanText(body)
     }
 
     private static func fallbackSummary(subject: String, body: String, length: AISummaryLength) -> EmailSummary {

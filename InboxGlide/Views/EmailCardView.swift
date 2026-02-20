@@ -168,6 +168,10 @@ struct EmailCardView: View {
         return preview.caseInsensitiveCompare(body) != .orderedSame
     }
 
+    private var shouldRenderHTMLBody: Bool {
+        preferences.emailBodyDisplayMode == .renderedHTML && sanitizedHTMLBody != nil
+    }
+
     private var sanitizedHTMLBody: String? {
         let value = message.htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !value.isEmpty else { return nil }
@@ -249,7 +253,7 @@ struct EmailCardView: View {
     @ViewBuilder
     private var bodySection: some View {
         Group {
-            if let htmlBody = sanitizedHTMLBody {
+            if shouldRenderHTMLBody, let htmlBody = sanitizedHTMLBody {
                 EmailHTMLBodyView(html: htmlBody)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {

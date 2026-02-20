@@ -228,7 +228,7 @@ final class GmailService {
         }
         if !htmlParts.isEmpty {
             let html = joinSections(htmlParts)
-            return (htmlToText(html), html.nilIfEmpty)
+            return (HTMLContentCleaner.extractDisplayText(fromHTML: html), html.nilIfEmpty)
         }
         return ("", nil)
     }
@@ -237,15 +237,16 @@ final class GmailService {
         let mimeType = part.mimeType?.lowercased() ?? ""
 
         if let data = part.body?.data, !data.isEmpty, let decoded = decodeBase64URL(data) {
-            let text = String(data: decoded, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let text = decodeBodyTextData(decoded).trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
                 if mimeType.hasPrefix("text/plain") {
-                    plainParts.append(text)
+                    plainParts.append(HTMLContentCleaner.cleanText(text))
                 } else if mimeType.hasPrefix("text/html") {
-                    htmlParts.append(text)
+                    if let sanitizedHTML = HTMLContentCleaner.sanitizeHTML(text) {
+                        htmlParts.append(sanitizedHTML)
+                    }
                 } else if mimeType.hasPrefix("text/") {
-                    plainParts.append(text)
+                    plainParts.append(HTMLContentCleaner.cleanText(text))
                 }
             }
         }
@@ -273,19 +274,14 @@ final class GmailService {
             .joined(separator: "\n\n")
     }
 
-    private static func htmlToText(_ html: String) -> String {
-        guard let data = html.data(using: .utf8) else { return html }
-        if let attributed = try? NSAttributedString(
-            data: data,
-            options: [
-                .documentType: NSAttributedString.DocumentType.html,
-                .characterEncoding: String.Encoding.utf8.rawValue
-            ],
-            documentAttributes: nil
-        ) {
-            return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+    private static func decodeBodyTextData(_ data: Data) -> String {
+        if let utf8 = String(data: data, encoding: .utf8) {
+            return utf8
         }
-        return html
+        if let latin1 = String(data: data, encoding: .isoLatin1) {
+            return latin1
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }
 
