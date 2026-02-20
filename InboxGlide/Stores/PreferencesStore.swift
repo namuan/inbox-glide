@@ -216,9 +216,9 @@ final class PreferencesStore: ObservableObject {
 
     var cardPadding: CGFloat {
         switch cardDensity {
-        case .compact: return 14
-        case .comfortable: return 18
-        case .spacious: return 24
+        case .compact: return 10
+        case .comfortable: return 14
+        case .spacious: return 18
         }
     }
 

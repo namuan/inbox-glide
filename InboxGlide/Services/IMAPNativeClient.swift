@@ -172,7 +172,7 @@ actor IMAPNativeClient: MailClient {
 
     func fetchMessage(uid: String) async throws -> IMAPFetchedMessage {
         let startedAt = Date()
-        let raw = try await sendCommand("UID FETCH \(uid) (FLAGS INTERNALDATE RFC822)")
+        let raw = try await sendCommand("UID FETCH \(uid) (FLAGS INTERNALDATE BODY.PEEK[])")
         let text = String(data: raw, encoding: .isoLatin1) ?? ""
 
         let flags = parseFlags(from: text)

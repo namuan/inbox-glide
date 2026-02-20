@@ -74,7 +74,7 @@ struct DeckView: View {
             }
 
             EmailCardView(message: message)
-                .padding(preferences.cardPadding)
+                .padding(10)
                 .offset(dragOffset)
                 .rotationEffect(.degrees(Double(dragOffset.width) / 40.0))
                 .overlay(actionOverlay)
