@@ -15,6 +15,24 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                if mailStore.isSyncing {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Syncing: \(mailStore.syncingProvidersLabel)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(.separator.opacity(0.65), lineWidth: 1)
+                    )
+                    .help("Background sync in progress")
+                }
+
                 if preferences.unifiedInboxEnabled {
                     Button {
                         mailStore.selectedAccountID = nil

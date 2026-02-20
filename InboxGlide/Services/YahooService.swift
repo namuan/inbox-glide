@@ -149,8 +149,17 @@ final class YahooService {
                 )
 
                 for uid in batchUIDs {
-                    let fetched = try await client.fetchMessage(uid: uid)
-                    batchMessages.append(parseYahooMessage(from: fetched))
+                    do {
+                        let fetched = try await client.fetchMessage(uid: uid)
+                        batchMessages.append(parseYahooMessage(from: fetched))
+                    } catch let error as IMAPClientError where Self.isTimeout(error) {
+                        logger.warning(
+                            "Skipping Yahoo message after IMAP timeout during batch fetch.",
+                            category: "YahooAPI",
+                            metadata: ["email": emailAddress, "messageID": uid]
+                        )
+                        continue
+                    }
                 }
 
                 cumulative += batchMessages.count
@@ -253,6 +262,13 @@ final class YahooService {
         default:
             return .connectionFailed(error.localizedDescription)
         }
+    }
+
+    private static func isTimeout(_ error: IMAPClientError) -> Bool {
+        if case .protocolError(let message) = error {
+            return message.localizedCaseInsensitiveContains("timed out")
+        }
+        return false
     }
 }
 

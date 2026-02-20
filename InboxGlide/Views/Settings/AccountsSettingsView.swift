@@ -27,6 +27,43 @@ struct AccountsSettingsView: View {
                 Toggle("Enable unified inbox", isOn: $preferences.unifiedInboxEnabled)
             }
 
+            Section("Sync Tuning") {
+                Stepper(
+                    "Background sync interval: \(preferences.backgroundSyncIntervalSeconds)s",
+                    value: $preferences.backgroundSyncIntervalSeconds,
+                    in: 30...300,
+                    step: 15
+                )
+
+                Stepper(
+                    "Background Gmail fetch: \(preferences.backgroundGmailFetchCount)",
+                    value: $preferences.backgroundGmailFetchCount,
+                    in: 20...200,
+                    step: 10
+                )
+
+                Stepper(
+                    "Background Yahoo/Fastmail fetch: \(preferences.backgroundIMAPFetchCount)",
+                    value: $preferences.backgroundIMAPFetchCount,
+                    in: 15...120,
+                    step: 5
+                )
+
+                Stepper(
+                    "Connect sync max results: \(preferences.connectSyncMaxResults)",
+                    value: $preferences.connectSyncMaxResults,
+                    in: 20...120,
+                    step: 2
+                )
+
+                Stepper(
+                    "Connect sync batch size: \(preferences.connectSyncBatchSize)",
+                    value: $preferences.connectSyncBatchSize,
+                    in: 4...20,
+                    step: 1
+                )
+            }
+
             Section("Connected Accounts") {
                 if mailStore.accounts.isEmpty {
                     Text("No accounts yet.")
@@ -92,13 +129,25 @@ struct AccountsSettingsView: View {
             }
 
             Section("Add Account") {
-                Button("Connect Gmail") {
-                    Task {
-                        await connectGmail()
+                HStack(spacing: 8) {
+                    Button("Connect Gmail") {
+                        Task {
+                            await connectGmail()
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(gmailAuth.isLoading)
+
+                    Button("Connect Yahoo") {
+                        isShowingYahooSetup = true
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Connect Fastmail") {
+                        isShowingFastmailSetup = true
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(gmailAuth.isLoading)
 
                 if gmailAuth.isLoading {
                     HStack(spacing: 8) {
@@ -112,16 +161,6 @@ struct AccountsSettingsView: View {
                         .foregroundStyle(.green)
                         .font(.subheadline)
                 }
-
-                Button("Connect Yahoo") {
-                    isShowingYahooSetup = true
-                }
-                .buttonStyle(.bordered)
-
-                Button("Connect Fastmail") {
-                    isShowingFastmailSetup = true
-                }
-                .buttonStyle(.bordered)
             }
         }
         .formStyle(.grouped)
@@ -363,8 +402,11 @@ struct AccountsSettingsView: View {
         do {
             let fetched = try await mailStore.syncYahooInboxProgressive(
                 for: emailAddress,
-                maxResults: 90,
-                batchSize: 15
+                maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                batchSize: min(
+                    max(4, preferences.connectSyncBatchSize),
+                    max(20, min(120, preferences.connectSyncMaxResults))
+                )
             ) { cumulative, batchCount in
                 DispatchQueue.main.async {
                     yahooSyncStatus = "Yahoo \(emailAddress): +\(batchCount), \(cumulative) loaded"
@@ -443,8 +485,11 @@ struct AccountsSettingsView: View {
         do {
             let fetched = try await mailStore.syncFastmailInboxProgressive(
                 for: emailAddress,
-                maxResults: 90,
-                batchSize: 15
+                maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                batchSize: min(
+                    max(4, preferences.connectSyncBatchSize),
+                    max(20, min(120, preferences.connectSyncMaxResults))
+                )
             ) { cumulative, batchCount in
                 DispatchQueue.main.async {
                     fastmailSyncStatus = "Fastmail \(emailAddress): +\(batchCount), \(cumulative) loaded"
