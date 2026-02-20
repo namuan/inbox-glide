@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AppKit
 
 struct EmailCardView: View {
     @EnvironmentObject private var preferences: PreferencesStore
@@ -408,9 +409,16 @@ private struct EmailHTMLBodyView: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
             guard let url = navigationAction.request.url else { return .cancel }
-            switch url.scheme?.lowercased() {
+            let scheme = url.scheme?.lowercased()
+
+            switch scheme {
             case "about", "data":
                 return .allow
+            case "http", "https", "mailto":
+                if navigationAction.navigationType == .linkActivated {
+                    NSWorkspace.shared.open(url)
+                }
+                return .cancel
             default:
                 return .cancel
             }
