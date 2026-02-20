@@ -124,32 +124,6 @@ struct EmailCardView: View {
             }
 
             Spacer()
-
-            Button {
-                mailStore.perform(action: .skip, isSecondary: false, messageID: message.id)
-            } label: {
-                Label("Skip", systemImage: "arrow.uturn.right")
-            }
-            .buttonStyle(.bordered)
-            .help("Move this email to the back of the stack")
-
-            Button {
-                mailStore.perform(action: .aiReply, isSecondary: false, messageID: message.id)
-            } label: {
-                Label("AI Reply", systemImage: "sparkles")
-            }
-            .buttonStyle(.bordered)
-            .help("Generate a quick reply")
-
-            if preferences.aiMode != .off {
-                Button {
-                    summaries.summarize(message, forceRefresh: true, length: preferences.aiSummaryLength)
-                } label: {
-                    Label("Re-summarize", systemImage: "text.append")
-                }
-                .buttonStyle(.bordered)
-                .help("Refresh on-device email summary")
-            }
         }
         .font(.system(size: 12 + preferences.fontScale))
     }
