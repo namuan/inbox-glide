@@ -22,24 +22,27 @@ final class EmailSummaryService: ObservableObject {
     @Published private(set) var states: [UUID: EmailSummaryViewState] = [:]
 
     private let summarizer = EmailSummarizer()
+    private var requestedLengths: [UUID: AISummaryLength] = [:]
 
     func state(for messageID: UUID) -> EmailSummaryViewState {
         states[messageID] ?? .idle
     }
 
-    func summarizeIfNeeded(_ email: EmailMessage) {
+    func summarizeIfNeeded(_ email: EmailMessage, length: AISummaryLength) {
+        let isSameRequestedLength = requestedLengths[email.id] == length
         switch state(for: email.id) {
-        case .loading, .ready:
+        case .loading where isSameRequestedLength, .ready where isSameRequestedLength:
             return
-        case .idle, .failed:
-            summarize(email, forceRefresh: false)
+        case .idle, .failed, .loading, .ready:
+            summarize(email, forceRefresh: false, length: length)
         }
     }
 
-    func summarize(_ email: EmailMessage, forceRefresh: Bool) {
+    func summarize(_ email: EmailMessage, forceRefresh: Bool, length: AISummaryLength) {
+        requestedLengths[email.id] = length
         states[email.id] = .loading
         Task {
-            let result = await summarizer.summarize(email, forceRefresh: forceRefresh)
+            let result = await summarizer.summarize(email, forceRefresh: forceRefresh, length: length)
             await MainActor.run {
                 states[email.id] = .ready(result)
             }
@@ -59,8 +62,8 @@ actor EmailSummarizer {
 
     init() {}
 
-    func summarize(_ email: EmailMessage, forceRefresh: Bool) async -> EmailSummaryResult {
-        let fingerprint = Self.fingerprint(for: email)
+    func summarize(_ email: EmailMessage, forceRefresh: Bool, length: AISummaryLength) async -> EmailSummaryResult {
+        let fingerprint = Self.fingerprint(for: email, length: length)
 
         if !forceRefresh, let cached = cache[email.id], cached.fingerprint == fingerprint {
             return cached.result
@@ -74,7 +77,7 @@ actor EmailSummarizer {
         }
 
         let task = Task { () -> EmailSummaryResult in
-            await self.computeSummary(for: email)
+            await self.computeSummary(for: email, length: length)
         }
         inFlight[email.id] = task
 
@@ -84,7 +87,7 @@ actor EmailSummarizer {
         return result
     }
 
-    private func computeSummary(for email: EmailMessage) async -> EmailSummaryResult {
+    private func computeSummary(for email: EmailMessage, length: AISummaryLength) async -> EmailSummaryResult {
         let subject = email.subject.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = Self.normalizedBody(email.body)
         let trimmedBody = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,13 +107,13 @@ actor EmailSummarizer {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(trimmedBody)
         if let language = recognizer.dominantLanguage, !supportedLanguages.contains(language) {
-            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody)
+            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
             return EmailSummaryResult(summary: fallback, source: .fallback, note: "Language may be unsupported for on-device summarization.")
         }
 
         let thermal = ProcessInfo.processInfo.thermalState
         if thermal == .serious || thermal == .critical {
-            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody)
+            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
             return EmailSummaryResult(
                 summary: fallback,
                 source: .fallback,
@@ -118,16 +121,14 @@ actor EmailSummarizer {
             )
         }
 
-        var note: String? = nil
         let inputBody: String
-        if trimmedBody.count > 10_000 {
-            inputBody = Self.hierarchicalInput(from: trimmedBody)
-            note = "Summarizing first portion of long email."
-        } else if trimmedBody.count > 4_000 {
-            inputBody = String(trimmedBody.prefix(4_000))
-            note = "Summarizing first portion of long email."
+        let note: String?
+        if trimmedBody.count > 4_000 {
+            inputBody = Self.hierarchicalInput(from: trimmedBody, length: length)
+            note = "Summarized using \(length == .full ? "full" : "short") full-email chunking."
         } else {
             inputBody = trimmedBody
+            note = nil
         }
 
         #if canImport(FoundationModels)
@@ -136,12 +137,14 @@ actor EmailSummarizer {
                 subject: subject,
                 email: email,
                 inputBody: inputBody,
+                fullBody: trimmedBody,
+                length: length,
                 fallbackNote: note
             )
         }
         #endif
 
-        let fallback = Self.fallbackSummary(subject: subject, body: inputBody)
+        let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
         return EmailSummaryResult(summary: fallback, source: .fallback, note: note ?? "On-device model unavailable on this OS version.")
     }
 
@@ -183,9 +186,22 @@ actor EmailSummarizer {
         return value
     }
 
-    private static func fallbackSummary(subject: String, body: String) -> EmailSummary {
-        let sentenceSummary = firstSentences(in: body, maxCount: 3)
-        let summaryBody = sentenceSummary.isEmpty ? String(body.prefix(220)) : sentenceSummary
+    private static func fallbackSummary(subject: String, body: String, length: AISummaryLength) -> EmailSummary {
+        let sentenceCount: Int
+        let characterCap: Int
+        switch length {
+        case .short:
+            sentenceCount = 3
+            characterCap = 220
+        case .medium:
+            sentenceCount = 5
+            characterCap = 700
+        case .full:
+            sentenceCount = 8
+            characterCap = 1_200
+        }
+        let sentenceSummary = firstSentences(in: body, maxCount: sentenceCount)
+        let summaryBody = sentenceSummary.isEmpty ? String(body.prefix(characterCap)) : sentenceSummary
         return .fallback(
             subject: subject,
             body: summaryBody,
@@ -251,11 +267,24 @@ actor EmailSummarizer {
         return "low"
     }
 
-    private static func hierarchicalInput(from body: String) -> String {
+    private static func hierarchicalInput(from body: String, length: AISummaryLength) -> String {
         var chunks: [String] = []
         var start = body.startIndex
         let chunkSize = 4_000
         let overlap = 250
+        let targetCharacterBudget: Int
+        let sentenceCount: Int
+        switch length {
+        case .short:
+            targetCharacterBudget = 12_000
+            sentenceCount = 1
+        case .medium:
+            targetCharacterBudget = 16_000
+            sentenceCount = 1
+        case .full:
+            targetCharacterBudget = 20_000
+            sentenceCount = 2
+        }
 
         while start < body.endIndex {
             let end = body.index(start, offsetBy: chunkSize, limitedBy: body.endIndex) ?? body.endIndex
@@ -264,16 +293,25 @@ actor EmailSummarizer {
             start = body.index(end, offsetBy: -overlap, limitedBy: body.startIndex) ?? body.startIndex
         }
 
-        let partials = chunks.prefix(3).map { firstSentences(in: $0, maxCount: 2) }
+        guard chunks.count > 1 else { return body }
+
+        let perChunkBudget = max(40, (targetCharacterBudget / chunks.count) - 20)
+        let partials = chunks.enumerated().map { index, chunk in
+            let sentence = firstSentences(in: chunk, maxCount: sentenceCount)
+            let excerptSource = sentence.isEmpty ? chunk : sentence
+            let excerpt = excerptSource.trimmingCharacters(in: .whitespacesAndNewlines)
+            return "[Part \(index + 1)/\(chunks.count)] \(String(excerpt.prefix(perChunkBudget)))"
+        }
         return partials.joined(separator: "\n")
     }
 
-    private static func fingerprint(for email: EmailMessage) -> String {
+    private static func fingerprint(for email: EmailMessage, length: AISummaryLength) -> String {
         var hasher = Hasher()
         hasher.combine(email.id)
         hasher.combine(email.subject)
         hasher.combine(email.body)
         hasher.combine(email.receivedAt.timeIntervalSince1970)
+        hasher.combine(length.rawValue)
         hasher.combine(modelFingerprint)
         return String(hasher.finalize())
     }
@@ -297,11 +335,13 @@ actor EmailSummarizer {
         subject: String,
         email: EmailMessage,
         inputBody: String,
+        fullBody: String,
+        length: AISummaryLength,
         fallbackNote: String?
     ) async -> EmailSummaryResult {
         let model = SystemLanguageModel.default
         guard model.isAvailable else {
-            let fallback = Self.fallbackSummary(subject: subject, body: inputBody)
+            let fallback = Self.fallbackSummary(subject: subject, body: fullBody, length: length)
             return EmailSummaryResult(
                 summary: fallback,
                 source: .fallback,
@@ -311,7 +351,7 @@ actor EmailSummarizer {
 
         let instructions = """
         You are an email summarization assistant.
-        Summarize emails concisely in 2-4 sentences.
+        \(summaryInstruction(for: length))
         Extract action items when present.
         Classify category and urgency.
         Focus only on the provided content.
@@ -339,11 +379,22 @@ actor EmailSummarizer {
                 category: "EmailSummary",
                 metadata: ["error": String(describing: error)]
             )
-            let fallback = Self.fallbackSummary(subject: subject, body: inputBody)
+            let fallback = Self.fallbackSummary(subject: subject, body: fullBody, length: length)
             return EmailSummaryResult(summary: fallback, source: .fallback, note: fallbackNote ?? "Model generation failed, fallback used.")
         }
     }
     #endif
+
+    private func summaryInstruction(for length: AISummaryLength) -> String {
+        switch length {
+        case .short:
+            return "Summarize emails concisely in 2-4 sentences."
+        case .medium:
+            return "Generate a moderately detailed summary in 4-7 sentences covering key points and important context."
+        case .full:
+            return "Generate a complete, detailed summary that covers all major points in the email in 6-12 sentences."
+        }
+    }
 }
 
 #if canImport(FoundationModels)

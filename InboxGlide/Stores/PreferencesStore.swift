@@ -48,6 +48,22 @@ enum AIMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum AISummaryLength: String, Codable, CaseIterable, Identifiable {
+    case short
+    case medium
+    case full
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .short: return "Short"
+        case .medium: return "Medium"
+        case .full: return "Full"
+        }
+    }
+}
+
 final class PreferencesStore: ObservableObject {
     private enum Keys {
         static let leftPrimary = "glide.left.primary"
@@ -74,6 +90,7 @@ final class PreferencesStore: ObservableObject {
         static let dailyReminderMinute = "notifications.daily.minute"
 
         static let aiMode = "ai.mode"
+        static let aiSummaryLength = "ai.summaryLength"
         static let analyticsOptIn = "privacy.analyticsOptIn"
         static let crashOptIn = "privacy.crashOptIn"
         
@@ -108,6 +125,7 @@ final class PreferencesStore: ObservableObject {
     @Published var dailyReminderMinute: Int { didSet { defaults.set(dailyReminderMinute, forKey: Keys.dailyReminderMinute) } }
 
     @Published var aiMode: AIMode { didSet { defaults.set(aiMode.rawValue, forKey: Keys.aiMode) } }
+    @Published var aiSummaryLength: AISummaryLength { didSet { defaults.set(aiSummaryLength.rawValue, forKey: Keys.aiSummaryLength) } }
 
     @Published var analyticsOptIn: Bool { didSet { defaults.set(analyticsOptIn, forKey: Keys.analyticsOptIn) } }
     @Published var crashReportingOptIn: Bool { didSet { defaults.set(crashReportingOptIn, forKey: Keys.crashOptIn) } }
@@ -151,6 +169,7 @@ final class PreferencesStore: ObservableObject {
         self.dailyReminderMinute = defaults.object(forKey: Keys.dailyReminderMinute) as? Int ?? 0
 
         self.aiMode = AIMode(rawValue: defaults.string(forKey: Keys.aiMode) ?? "") ?? .local
+        self.aiSummaryLength = AISummaryLength(rawValue: defaults.string(forKey: Keys.aiSummaryLength) ?? "") ?? .short
         self.analyticsOptIn = defaults.object(forKey: Keys.analyticsOptIn) as? Bool ?? false
         self.crashReportingOptIn = defaults.object(forKey: Keys.crashOptIn) as? Bool ?? false
         
