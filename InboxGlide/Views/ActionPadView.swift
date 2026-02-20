@@ -21,13 +21,13 @@ struct ActionPadView: View {
                         mailStore.perform(action: .skip, isSecondary: false, messageID: message.id)
                     } label: {
                         VStack(spacing: 6) {
-                            shortcutBadge("⌘K")
+                            shortcutBadge("⌘↓")
                             Label("Skip", systemImage: "arrow.uturn.right")
                         }
                         .frame(width: 110)
                     }
                     .buttonStyle(.bordered)
-                    .keyboardShortcut("k", modifiers: [.command])
+                    .keyboardShortcut(.downArrow, modifiers: [.command])
                     .help("Move this email to the back of the stack")
 
                     Button {
