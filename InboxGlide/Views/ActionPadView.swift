@@ -20,29 +20,41 @@ struct ActionPadView: View {
                     Button {
                         mailStore.perform(action: .skip, isSecondary: false, messageID: message.id)
                     } label: {
-                        Label("Skip", systemImage: "arrow.uturn.right")
-                            .frame(width: 110)
+                        VStack(spacing: 6) {
+                            shortcutBadge("⌘K")
+                            Label("Skip", systemImage: "arrow.uturn.right")
+                        }
+                        .frame(width: 110)
                     }
                     .buttonStyle(.bordered)
+                    .keyboardShortcut("k", modifiers: [.command])
                     .help("Move this email to the back of the stack")
 
                     Button {
                         mailStore.perform(action: .aiReply, isSecondary: false, messageID: message.id)
                     } label: {
-                        Label("AI Reply", systemImage: "sparkles")
-                            .frame(width: 110)
+                        VStack(spacing: 6) {
+                            shortcutBadge("⌘R")
+                            Label("AI Reply", systemImage: "sparkles")
+                        }
+                        .frame(width: 110)
                     }
                     .buttonStyle(.bordered)
+                    .keyboardShortcut("r", modifiers: [.command])
                     .help("Generate a quick reply")
 
                     if preferences.aiMode != .off {
                         Button {
                             summaries.summarize(message, forceRefresh: true, length: preferences.aiSummaryLength)
                         } label: {
-                            Label("Re-summarize", systemImage: "text.append")
-                                .frame(width: 110)
+                            VStack(spacing: 6) {
+                                shortcutBadge("⌘⇧S")
+                                Label("Re-summarize", systemImage: "text.append")
+                            }
+                            .frame(width: 110)
                         }
                         .buttonStyle(.bordered)
+                        .keyboardShortcut("s", modifiers: [.command, .shift])
                         .help("Refresh on-device email summary")
                     }
                 }
@@ -105,5 +117,17 @@ struct ActionPadView: View {
         case .up: return .blue
         case .down: return .orange
         }
+    }
+
+    private func shortcutBadge(_ value: String) -> some View {
+        Text(value)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.thinMaterial, in: Capsule(style: .continuous))
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(.separator.opacity(0.7), lineWidth: 1)
+            )
     }
 }
