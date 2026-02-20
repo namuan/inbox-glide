@@ -40,6 +40,9 @@ enum YahooServiceError: LocalizedError {
 
 final class YahooService {
     private let logger = AppLogger.shared
+    private let timeoutQueue = DispatchQueue(label: "InboxGlide.YahooService.Timeouts", qos: .utility)
+    private var timedOutUIDExpiryByEmail: [String: [String: Date]] = [:]
+    private let timeoutSkipDuration: TimeInterval = 20 * 60
     private let providerConfig = MailProviderConfig(
         hostname: "imap.mail.yahoo.com",
         port: 993,
@@ -149,10 +152,19 @@ final class YahooService {
                 )
 
                 for uid in batchUIDs {
+                    if shouldSkipTimedOutUID(uid, emailAddress: emailAddress) {
+                        logger.debug(
+                            "Skipping Yahoo message due to recent timeout cooldown.",
+                            category: "YahooAPI",
+                            metadata: ["email": emailAddress, "messageID": uid]
+                        )
+                        continue
+                    }
                     do {
                         let fetched = try await client.fetchMessage(uid: uid)
                         batchMessages.append(parseYahooMessage(from: fetched))
                     } catch let error as IMAPClientError where Self.isTimeout(error) {
+                        markTimedOutUID(uid, emailAddress: emailAddress)
                         logger.warning(
                             "Skipping Yahoo message after IMAP timeout during batch fetch.",
                             category: "YahooAPI",
@@ -269,6 +281,36 @@ final class YahooService {
             return message.localizedCaseInsensitiveContains("timed out")
         }
         return false
+    }
+
+    private func shouldSkipTimedOutUID(_ uid: String, emailAddress: String) -> Bool {
+        timeoutQueue.sync {
+            let key = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            cleanupExpiredTimeoutsLocked(for: key)
+            guard let expiry = timedOutUIDExpiryByEmail[key]?[uid] else { return false }
+            return expiry > Date()
+        }
+    }
+
+    private func markTimedOutUID(_ uid: String, emailAddress: String) {
+        timeoutQueue.sync {
+            let key = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            cleanupExpiredTimeoutsLocked(for: key)
+            var map = timedOutUIDExpiryByEmail[key] ?? [:]
+            map[uid] = Date().addingTimeInterval(timeoutSkipDuration)
+            timedOutUIDExpiryByEmail[key] = map
+        }
+    }
+
+    private func cleanupExpiredTimeoutsLocked(for key: String) {
+        guard var map = timedOutUIDExpiryByEmail[key] else { return }
+        let now = Date()
+        map = map.filter { $0.value > now }
+        if map.isEmpty {
+            timedOutUIDExpiryByEmail[key] = nil
+        } else {
+            timedOutUIDExpiryByEmail[key] = map
+        }
     }
 }
 

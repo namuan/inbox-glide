@@ -702,6 +702,27 @@ final class MailStore: ObservableObject {
         deleteStoreFile()
     }
 
+    func clearLocalState(for providers: Set<MailProvider>) {
+        guard !providers.isEmpty else { return }
+
+        let targetAccountIDs = Set(
+            accounts
+                .filter { providers.contains($0.provider) }
+                .map(\.id)
+        )
+        guard !targetAccountIDs.isEmpty else { return }
+
+        messages.removeAll { targetAccountIDs.contains($0.accountID) }
+        queuedActions.removeAll { targetAccountIDs.contains($0.accountID) }
+        logger.info(
+            "Cleared local state for selected providers.",
+            category: "MailStore",
+            metadata: ["providers": providers.map(\.displayName).sorted().joined(separator: ", ")]
+        )
+        scheduleSave()
+        rebuildDeck()
+    }
+
     func exportData(to url: URL) throws {
         let snapshot = StoreSnapshot(
             accounts: accounts,
