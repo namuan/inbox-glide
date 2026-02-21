@@ -17,6 +17,8 @@ struct AccountsSettingsView: View {
     @State private var fastmailErrorMessage: String?
     @State private var fastmailInfoMessage: String?
     @State private var fastmailSyncStatus: String?
+    @State private var isShowingGmailConnectedStatus = false
+    @State private var gmailConnectedStatusHideTask: Task<Void, Never>?
     @State private var providersPendingLocalStateClear: Set<MailProvider> = []
     @State private var isConfirmingProviderLocalStateClear = false
     private let logger = AppLogger.shared
@@ -164,7 +166,7 @@ struct AccountsSettingsView: View {
                             await connectGmail()
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .disabled(gmailAuth.isLoading)
 
                     Button("Connect Yahoo") {
@@ -185,7 +187,7 @@ struct AccountsSettingsView: View {
                         Text("Connecting Gmail...")
                             .foregroundStyle(.secondary)
                     }
-                } else if let connectedEmail = gmailAuth.connectedEmail {
+                } else if isShowingGmailConnectedStatus, let connectedEmail = gmailAuth.connectedEmail {
                     Label("Connected: \(connectedEmail)", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.subheadline)
@@ -281,6 +283,10 @@ struct AccountsSettingsView: View {
         } message: {
             Text("This removes local messages and queued actions for: \(providersPendingLocalStateClear.map(\.displayName).sorted().joined(separator: ", ")).")
         }
+        .onDisappear {
+            gmailConnectedStatusHideTask?.cancel()
+            gmailConnectedStatusHideTask = nil
+        }
     }
 
     private func canSync(_ account: MailAccount) -> Bool {
@@ -320,6 +326,7 @@ struct AccountsSettingsView: View {
             )
             return
         }
+        showGmailConnectedStatusTemporarily()
 
         let alreadyExists = mailStore.accounts.contains { account in
             account.provider == .gmail && account.emailAddress.caseInsensitiveCompare(emailAddress) == .orderedSame
@@ -375,6 +382,16 @@ struct AccountsSettingsView: View {
                 category: "AccountsSettings",
                 metadata: ["email": emailAddress, "error": error.localizedDescription]
             )
+        }
+    }
+
+    private func showGmailConnectedStatusTemporarily() {
+        isShowingGmailConnectedStatus = true
+        gmailConnectedStatusHideTask?.cancel()
+        gmailConnectedStatusHideTask = Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            isShowingGmailConnectedStatus = false
         }
     }
 
