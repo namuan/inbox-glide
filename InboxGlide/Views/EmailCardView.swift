@@ -17,7 +17,7 @@ struct EmailCardView: View {
     private let columnDividerWidth: CGFloat = 8
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             accountBanner
             header
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -38,11 +38,6 @@ struct EmailCardView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Text(message.preview)
-                .font(.system(size: 14 + preferences.fontScale))
-                .foregroundStyle(.secondary)
-                .lineLimit(5)
 
             contentArea
 
