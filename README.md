@@ -4,8 +4,6 @@ InboxGlide is a macOS SwiftUI app prototype for processing email as a card deck:
 
 ![](assets/intro.png)
 
-This repo currently ships a local-first, offline-capable prototype with production-ready provider integrations:
-
 - Card-based inbox with trackpad/mouse drag gestures
 - Keyboard glides (arrow keys)
 - On-screen action buttons
@@ -39,12 +37,6 @@ chmod +x install.command
 Or double-click `inbox-glide/install.command` in Finder (it must be executable).
 
 The script builds a Release app and installs it to `~/Applications/InboxGlide.app`.
-
-## Run in Xcode (development)
-
-1. Open `inbox-glide/InboxGlide.xcodeproj`
-2. Select the `InboxGlide` scheme
-3. Run
 
 ## Notes
 
