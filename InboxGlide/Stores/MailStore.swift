@@ -232,7 +232,7 @@ final class MailStore: ObservableObject {
             category: "MailStore",
             metadata: ["provider": provider.rawValue, "email": cleanedEmail, "accountID": account.id.uuidString]
         )
-        if selectedAccountID == nil {
+        if selectedAccountID == nil && !preferences.unifiedInboxEnabled {
             selectedAccountID = account.id
         }
         scheduleSave()
@@ -329,7 +329,7 @@ final class MailStore: ObservableObject {
             inserted += 1
         }
 
-        if selectedAccountID == nil {
+        if selectedAccountID == nil && !preferences.unifiedInboxEnabled {
             selectedAccountID = account.id
         }
         logger.info(
@@ -490,7 +490,7 @@ final class MailStore: ObservableObject {
             inserted += 1
         }
 
-        if selectedAccountID == nil {
+        if selectedAccountID == nil && !preferences.unifiedInboxEnabled {
             selectedAccountID = account.id
         }
         logger.info(
@@ -651,7 +651,7 @@ final class MailStore: ObservableObject {
             inserted += 1
         }
 
-        if selectedAccountID == nil {
+        if selectedAccountID == nil && !preferences.unifiedInboxEnabled {
             selectedAccountID = account.id
         }
         logger.info(
