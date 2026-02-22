@@ -4,23 +4,22 @@ InboxGlide is a macOS SwiftUI app prototype for processing email as a card deck:
 
 ![](assets/intro.png)
 
-This repo currently ships a local-first, offline-capable prototype:
+This repo currently ships a local-first, offline-capable prototype with production-ready provider integrations:
 
 - Card-based inbox with trackpad/mouse drag gestures
 - Keyboard glides (arrow keys)
 - On-screen action buttons
 - Customizable glide mappings (primary + Option/Alt secondary)
-- Multi-account + optional unified inbox (sample/local accounts)
+- Multi-account + optional unified inbox
 - Local encrypted store (AES-GCM; key stored in macOS Keychain)
 - AI quick reply (local stub) with local PII scrubbing
 - Email summary with on-device Foundation Models support and local fallback
 - Optional daily reminder notifications
 - Data export + delete-all
-
-Provider integrations are in progress:
-- Gmail OAuth + inbox sync + provider delete
-- Yahoo app-password onboarding + IMAP inbox sync + provider delete
-- Fastmail app-password onboarding + IMAP inbox sync + provider delete
+- **Production-ready provider integrations:**
+  - Gmail OAuth + inbox sync
+  - Yahoo app-password onboarding + IMAP inbox sync
+  - Fastmail app-password onboarding + IMAP inbox sync
 
 ## Requirements
 
