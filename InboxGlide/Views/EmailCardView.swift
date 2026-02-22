@@ -105,14 +105,14 @@ struct EmailCardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.senderName)
                     .font(.system(size: 13 + preferences.fontScale, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(ageIndicatorColor(), in: Capsule(style: .continuous))
+                    .foregroundStyle(.white)
                 HStack(spacing: 6) {
                     Text(message.senderEmail)
                     Text("(\(formatFullDate()))")
                         .foregroundStyle(.secondary)
-                    Circle()
-                        .fill(ageIndicatorColor())
-                        .frame(width: 6, height: 6)
-                        .accessibilityHidden(true)
                 }
                 .font(.system(size: 12 + preferences.fontScale))
                 .foregroundStyle(.secondary)
@@ -136,13 +136,16 @@ struct EmailCardView: View {
         if let years = components.year, years > 0 {
             return "\(years)y ago"
         }
-        if let months = components.month, months > 0 {
+        if let months = components.month, months >= 3 {
+            return "Over 3 months ago"
+        }
+        if let months = components.month, months >= 1 {
             return "\(months)mo ago"
         }
-        if let weeks = components.weekOfYear, weeks > 0 {
+        if let weeks = components.weekOfYear, weeks >= 1 {
             return "\(weeks)w ago"
         }
-        if let days = components.day, days > 0 {
+        if let days = components.day, days >= 1 {
             return "\(days)d ago"
         }
         if let hours = components.hour, hours > 0 {
@@ -156,21 +159,21 @@ struct EmailCardView: View {
     
     private func ageIndicatorColor() -> Color {
         let now = Date()
-        let components = Calendar.current.dateComponents([.minute, .hour, .day], from: message.receivedAt, to: now)
+        let components = Calendar.current.dateComponents([.day, .weekOfYear, .month], from: message.receivedAt, to: now)
         
-        if let days = components.day, days >= 7 {
-            return .secondary
+        if let months = components.month, months >= 3 {
+            return .gray // Dark gray for very old emails (> 3 months)
         }
-        if let days = components.day, days >= 3 {
-            return .orange
+        if let months = components.month, months >= 1 {
+            return .brown // Brown for old emails (1-3 months)
+        }
+        if let weeks = components.weekOfYear, weeks >= 1 {
+            return .orange // Orange for emails older than a week but less than a month
         }
         if let days = components.day, days >= 1 {
-            return .yellow
+            return .yellow // Yellow for emails older than a day but less than a week
         }
-        if let hours = components.hour, hours >= 6 {
-            return .blue
-        }
-        return .green
+        return .green // Green for recent emails (< 24 hours)
     }
 
     private var footer: some View {
