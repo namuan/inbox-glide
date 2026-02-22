@@ -20,9 +20,24 @@ struct EmailCardView: View {
         VStack(alignment: .leading, spacing: 14) {
             accountBanner
             header
-            Text(message.subject)
-                .font(.system(size: 20 + preferences.fontScale, weight: .semibold))
-                .lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(message.subject)
+                    .font(.system(size: 20 + preferences.fontScale, weight: .semibold))
+                    .lineLimit(2)
+                
+                Spacer()
+                
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(ageIndicatorColor())
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    
+                    Text(relativeTimeSinceReceived())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Text(message.preview)
                 .font(.system(size: 14 + preferences.fontScale))
@@ -95,17 +110,72 @@ struct EmailCardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.senderName)
                     .font(.system(size: 13 + preferences.fontScale, weight: .semibold))
-                Text(message.senderEmail)
-                    .font(.system(size: 12 + preferences.fontScale))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(message.senderEmail)
+                    Text("(\(formatFullDate()))")
+                        .foregroundStyle(.secondary)
+                    Circle()
+                        .fill(ageIndicatorColor())
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+                .font(.system(size: 12 + preferences.fontScale))
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
-
-            Text(message.receivedAt, style: .date)
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
+    }
+    
+    private func formatFullDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: message.receivedAt)
+    }
+    
+    private func relativeTimeSinceReceived() -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day, .weekOfYear, .month, .year], from: message.receivedAt, to: now)
+        
+        if let years = components.year, years > 0 {
+            return "\(years)y ago"
+        }
+        if let months = components.month, months > 0 {
+            return "\(months)mo ago"
+        }
+        if let weeks = components.weekOfYear, weeks > 0 {
+            return "\(weeks)w ago"
+        }
+        if let days = components.day, days > 0 {
+            return "\(days)d ago"
+        }
+        if let hours = components.hour, hours > 0 {
+            return "\(hours)h ago"
+        }
+        if let minutes = components.minute, minutes > 0 {
+            return "\(minutes)m ago"
+        }
+        return "Just now"
+    }
+    
+    private func ageIndicatorColor() -> Color {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day], from: message.receivedAt, to: now)
+        
+        if let days = components.day, days >= 7 {
+            return .secondary
+        }
+        if let days = components.day, days >= 3 {
+            return .orange
+        }
+        if let days = components.day, days >= 1 {
+            return .yellow
+        }
+        if let hours = components.hour, hours >= 6 {
+            return .blue
+        }
+        return .green
     }
 
     private var footer: some View {
