@@ -12,9 +12,9 @@ This repo currently ships a local-first, offline-capable prototype with producti
 - Customizable glide mappings (primary + Option/Alt secondary)
 - Multi-account + optional unified inbox
 - Local encrypted store (AES-GCM; key stored in macOS Keychain)
-- AI quick reply (local stub) with local PII scrubbing
+- AI quick reply (local stub) with local PII scrubbing (Coming soon...)
 - Email summary with on-device Foundation Models support and local fallback
-- Optional daily reminder notifications
+- Optional daily reminder notifications (Coming soon...)
 - Data export + delete-all
 - **Production-ready provider integrations:**
   - Gmail OAuth + inbox sync
