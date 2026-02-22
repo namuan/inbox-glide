@@ -1,4 +1,4 @@
-# InboxGlide (macOS)
+# InboxGlide
 
 InboxGlide is a macOS SwiftUI app prototype for processing email as a card deck: glide (swipe) a message left/right/up/down to apply an action.
 
