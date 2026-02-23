@@ -113,9 +113,28 @@ final class GmailService {
         var results: [GmailInboxMessage] = []
         results.reserveCapacity(refs.count)
 
-        for ref in refs {
-            let detail = try await fetchMessageDetail(accessToken: accessToken, id: ref.id)
-            results.append(detail)
+        let maxConcurrentDetails = min(8, refs.count)
+        var nextIndex = 0
+
+        try await withThrowingTaskGroup(of: GmailInboxMessage.self) { group in
+            while nextIndex < maxConcurrentDetails {
+                let messageID = refs[nextIndex].id
+                nextIndex += 1
+                group.addTask { [self] in
+                    try await fetchMessageDetail(accessToken: accessToken, id: messageID)
+                }
+            }
+
+            while let detail = try await group.next() {
+                results.append(detail)
+                if nextIndex < refs.count {
+                    let messageID = refs[nextIndex].id
+                    nextIndex += 1
+                    group.addTask { [self] in
+                        try await fetchMessageDetail(accessToken: accessToken, id: messageID)
+                    }
+                }
+            }
         }
 
         logger.info("Fetched Gmail message details.", category: "GmailAPI", metadata: ["count": "\(results.count)"])

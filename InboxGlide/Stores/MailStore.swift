@@ -1051,9 +1051,10 @@ final class MailStore: ObservableObject {
         defer { isBackgroundSyncInProgress = false }
         logger.debug("Background provider sync started.", category: "MailStore")
 
-        await backgroundSyncGmailIfConnected()
-        await backgroundSyncYahooAccounts()
-        await backgroundSyncFastmailAccounts()
+        async let gmailSync: Void = backgroundSyncGmailIfConnected()
+        async let yahooSync: Void = backgroundSyncYahooAccounts()
+        async let fastmailSync: Void = backgroundSyncFastmailAccounts()
+        _ = await (gmailSync, yahooSync, fastmailSync)
         logger.debug("Background provider sync finished.", category: "MailStore")
     }
 
