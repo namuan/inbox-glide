@@ -3,9 +3,7 @@ import Foundation
 enum GlideAction: String, Codable, CaseIterable, Identifiable {
     case delete
     case archive
-    case markRead
     case markUnread
-    case star
     case unstar
     case markImportant
     case unmarkImportant
@@ -28,9 +26,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .delete: return "Delete"
         case .archive: return "Archive"
-        case .markRead: return "Mark Read"
         case .markUnread: return "Mark Unread"
-        case .star: return "Star"
         case .unstar: return "Unstar"
         case .markImportant: return "Mark Important"
         case .unmarkImportant: return "Unmark Important"
@@ -53,9 +49,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .delete: return "trash"
         case .archive: return "archivebox"
-        case .markRead: return "envelope.open"
         case .markUnread: return "envelope.badge"
-        case .star: return "star"
         case .unstar: return "star.slash"
         case .markImportant: return "exclamationmark.circle"
         case .unmarkImportant: return "exclamationmark.circle.fill"

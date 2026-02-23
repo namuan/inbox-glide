@@ -887,15 +887,8 @@ final class MailStore: ObservableObject {
             clearSkippedState(for: messageID)
             archiveOnProviderIfPossible(message)
 
-        case .markRead:
-            messages[idx].isRead = true
-            advanceToNextMessage(after: messageID)
-
         case .markUnread:
             messages[idx].isRead = false
-
-        case .star:
-            messages[idx].isStarred = true
 
         case .unstar:
             messages[idx].isStarred = false

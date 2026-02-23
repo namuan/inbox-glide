@@ -18,19 +18,6 @@ struct ActionPadView: View {
             HStack(spacing: 10) {
                 if let message = mailStore.currentMessage {
                     Button {
-                        mailStore.perform(action: .skip, isSecondary: false, messageID: message.id)
-                    } label: {
-                        VStack(spacing: 6) {
-                            shortcutBadge("⌘↓")
-                            Label("Skip", systemImage: "arrow.uturn.right")
-                        }
-                        .frame(width: 110)
-                    }
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut(.downArrow, modifiers: [.command])
-                    .help("Move this email to the back of the stack")
-
-                    Button {
                         mailStore.perform(action: .aiReply, isSecondary: false, messageID: message.id)
                     } label: {
                         VStack(spacing: 6) {

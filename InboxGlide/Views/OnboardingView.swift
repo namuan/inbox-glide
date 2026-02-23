@@ -52,7 +52,7 @@ struct WelcomeStep: View {
             }
             
             VStack(alignment: .leading, spacing: 20) {
-                FeatureRow(icon: "hand.draw", title: "Intuitive Gestures", description: "Swipe left to delete, right to star, up to unsubscribe, down to block")
+                FeatureRow(icon: "hand.draw", title: "Intuitive Gestures", description: "Swipe left to delete, right to archive, up to mark unread, down to skip")
                 FeatureRow(icon: "sparkles", title: "AI-Powered Replies", description: "Quick, smart responses with your privacy protected")
                 FeatureRow(icon: "lock.shield", title: "Privacy First", description: "Your emails stay on your Mac. Always.")
             }

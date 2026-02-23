@@ -162,9 +162,14 @@ final class PreferencesStore: ObservableObject {
         self.defaults = defaults
 
         let leftP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.leftPrimary), fallback: .delete)
-        let rightP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.rightPrimary), fallback: .star)
-        let upP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.upPrimary), fallback: .archive)
-        let downP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.downPrimary), fallback: .markRead)
+        let rightP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.rightPrimary), fallback: .archive)
+        var upP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.upPrimary), fallback: .markUnread)
+        let downP = Self.sanitizedAction(raw: defaults.string(forKey: Keys.downPrimary), fallback: .skip)
+
+        if upP == .archive, rightP == .archive {
+            upP = .markUnread
+            defaults.set(upP.rawValue, forKey: Keys.upPrimary)
+        }
 
         let leftS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.leftSecondary), fallback: .archive)
         let rightS = Self.sanitizedAction(raw: defaults.string(forKey: Keys.rightSecondary), fallback: .markImportant)

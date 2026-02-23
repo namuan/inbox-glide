@@ -8,6 +8,7 @@ InboxGlide is a macOS SwiftUI app prototype for processing email as a card deck:
 - Keyboard glides (arrow keys)
 - On-screen action buttons
 - Customizable glide mappings (primary + Option/Alt secondary)
+- Default primary glide mapping: Left = Delete, Right = Archive, Up = Mark Unread, Down = Skip
 - Multi-account + optional unified inbox
 - Local encrypted store (AES-GCM; key stored in macOS Keychain)
 - AI quick reply (local stub) with local PII scrubbing (Coming soon...)
