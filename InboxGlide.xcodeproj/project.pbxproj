@@ -48,10 +48,12 @@
 		CED50871B0C44A39422C692D /* FastmailCredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADE7DDE77E2B324B643A4AF /* FastmailCredentialsStore.swift */; };
 		D134A8568F066EEC20A52158 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AB28E7B63992D3F357DED8 /* AppLogger.swift */; };
 		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
+		D3E91DBD750F3F1AB856F75F /* EmailDurationBucket.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B5F3362D7625879C0F0BD6 /* EmailDurationBucket.swift */; };
 		D70845B6BEEA3ADFFF840D3B /* AppDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE9A3644D31AFE6E8A364C2 /* AppDirectories.swift */; };
 		DE60AFA389AD5506A2777B76 /* IMAPNativeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */; };
 		E058FC48E00FEDC52EDB34F9 /* FastmailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E5D44CA12969021DEAE98D /* FastmailService.swift */; };
 		E86A4E8C7E234801047B740F /* ActionPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23857CF30A40C77CC197739A /* ActionPadView.swift */; };
+		EFDC10874124D2571386E0ED /* EmailDurationIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC52F3D997CADB68B239639 /* EmailDurationIndicatorView.swift */; };
 		F9832AE88CA249CADF5EDA5F /* ProviderInstructionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */; };
 		FD98DE3669B0210DB36B57CC /* AccountSetupGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1268C0269B7132A5899341 /* AccountSetupGuideView.swift */; };
 		FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000D5707AA9BA773EBFC7BCE /* RootView.swift */; };
@@ -73,6 +75,7 @@
 		26887FF1E407D2D7CDECF086 /* DeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckView.swift; sourceTree = "<group>"; };
 		282FD92E01C2E28FEE4F0388 /* PreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesStore.swift; sourceTree = "<group>"; };
 		2A39F8BAB8240171A24CEFCF /* KeyEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventMonitor.swift; sourceTree = "<group>"; };
+		2BC52F3D997CADB68B239639 /* EmailDurationIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailDurationIndicatorView.swift; sourceTree = "<group>"; };
 		34AE5B8897D83A21595F3D08 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsView.swift; sourceTree = "<group>"; };
 		3952EC5AFD37182DFA121778 /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
 		396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideAction.swift; sourceTree = "<group>"; };
@@ -101,6 +104,7 @@
 		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
 		B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPNativeClient.swift; sourceTree = "<group>"; };
 		B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSummary.swift; sourceTree = "<group>"; };
+		C2B5F3362D7625879C0F0BD6 /* EmailDurationBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailDurationBucket.swift; sourceTree = "<group>"; };
 		CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E2B8CFE31781BC4692469556 /* YahooService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YahooService.swift; sourceTree = "<group>"; };
@@ -176,6 +180,7 @@
 				23857CF30A40C77CC197739A /* ActionPadView.swift */,
 				26887FF1E407D2D7CDECF086 /* DeckView.swift */,
 				FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */,
+				2BC52F3D997CADB68B239639 /* EmailDurationIndicatorView.swift */,
 				CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */,
 				820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */,
 				9FC14234670B98358BD37630 /* ReplyComposerView.swift */,
@@ -204,6 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				51BCA5D1AA98EB2D03736440 /* Account.swift */,
+				C2B5F3362D7625879C0F0BD6 /* EmailDurationBucket.swift */,
 				A700FED79871FF27D7C87E13 /* EmailMessage.swift */,
 				B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */,
 				396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */,
@@ -319,6 +325,8 @@
 				C54A19CB88E10B6684ADCFB7 /* AppearanceSettingsView.swift in Sources */,
 				129C9B0C4DE2533D63AC3EC5 /* DeckView.swift in Sources */,
 				9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */,
+				D3E91DBD750F3F1AB856F75F /* EmailDurationBucket.swift in Sources */,
+				EFDC10874124D2571386E0ED /* EmailDurationIndicatorView.swift in Sources */,
 				83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */,
 				99BBE1F2E373895DFA4FBEEA /* EmailSummary.swift in Sources */,
 				8AE6CE9DDFC00E7A507C5441 /* EmailSummaryService.swift in Sources */,

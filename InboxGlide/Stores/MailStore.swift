@@ -138,6 +138,41 @@ final class MailStore: ObservableObject {
             .sorted()
             .joined(separator: ", ")
     }
+    
+    var emailDurationBucketCounts: [EmailDurationBucket: Int] {
+        let now = Date()
+        let unified = preferences.unifiedInboxEnabled
+        
+        let visible = messages
+            .filter { $0.deletedAt == nil }
+            .filter { $0.archivedAt == nil }
+            .filter { ($0.snoozedUntil ?? .distantPast) <= now }
+            .filter { !blockedSenders.contains($0.senderEmail.lowercased()) }
+            .filter { msg in
+                guard let category = selectedCategory else { return true }
+                return msg.category == category
+            }
+            .filter { msg in
+                if unified {
+                    if let selected = selectedAccountID { return msg.accountID == selected }
+                    return true
+                }
+                if let selected = selectedAccountID { return msg.accountID == selected }
+                return msg.accountID == accounts.first?.id
+            }
+        
+        var counts: [EmailDurationBucket: Int] = [:]
+        for bucket in EmailDurationBucket.allCases {
+            counts[bucket] = 0
+        }
+        
+        for message in visible {
+            let bucket = EmailDurationBucket.bucket(for: message.receivedAt, relativeTo: now)
+            counts[bucket, default: 0] += 1
+        }
+        
+        return counts
+    }
 
     func rebuildDeck() {
         let now = Date()

@@ -15,6 +15,16 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                EmailDurationIndicatorView(bucketCounts: mailStore.emailDurationBucketCounts)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(.separator.opacity(0.65), lineWidth: 1)
+                    )
+                    .padding(.trailing, 8)
+                
                 if mailStore.isSyncing {
                     HStack(spacing: 10) {
                         ProgressView()
