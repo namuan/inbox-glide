@@ -41,6 +41,22 @@ struct SidebarView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        Spacer()
+                        if mailStore.syncingProviders.contains(account.provider) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel("Syncing \(account.displayName)")
+                        } else {
+                            Button {
+                                Task {
+                                    await mailStore.syncAccountNow(account)
+                                }
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Sync now")
+                        }
                     }
                     .tag(Optional(account.id))
                 }

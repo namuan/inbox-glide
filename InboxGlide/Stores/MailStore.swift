@@ -249,6 +249,85 @@ final class MailStore: ObservableObject {
         scheduleSave()
     }
 
+    func syncAccountNow(_ account: MailAccount) async {
+        guard networkMonitor.isOnline else {
+            await MainActor.run {
+                errorAlert = ErrorAlert(title: "Offline", message: "Connect to the internet to sync this account.")
+            }
+            return
+        }
+
+        switch account.provider {
+        case .gmail:
+            await markSyncStarted(provider: .gmail)
+            defer { Task { await self.markSyncFinished(provider: .gmail) } }
+
+            let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
+            if !hasSession {
+                await MainActor.run {
+                    errorAlert = ErrorAlert(
+                        title: "Gmail Sync Failed",
+                        message: "No Gmail session found for \(account.emailAddress). Reconnect Gmail in Settings."
+                    )
+                }
+                return
+            }
+
+            do {
+                let items = try await gmailAuthStore.fetchRecentInboxMessages(
+                    for: account.emailAddress,
+                    maxResults: 30
+                )
+                upsertGmailMessages(for: account.emailAddress, items: items)
+            } catch {
+                await MainActor.run {
+                    errorAlert = ErrorAlert(
+                        title: "Gmail Sync Failed",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+
+        case .yahoo:
+            do {
+                _ = try await syncYahooInboxProgressive(
+                    for: account.emailAddress,
+                    maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                    batchSize: min(
+                        max(4, preferences.connectSyncBatchSize),
+                        max(20, min(120, preferences.connectSyncMaxResults))
+                    )
+                )
+            } catch {
+                await MainActor.run {
+                    errorAlert = ErrorAlert(
+                        title: "Yahoo Sync Failed",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+
+        case .fastmail:
+            do {
+                _ = try await syncFastmailInboxProgressive(
+                    for: account.emailAddress,
+                    maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                    batchSize: min(
+                        max(4, preferences.connectSyncBatchSize),
+                        max(20, min(120, preferences.connectSyncMaxResults))
+                    )
+                )
+            } catch {
+                await MainActor.run {
+                    errorAlert = ErrorAlert(
+                        title: "Fastmail Sync Failed",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+        }
+    }
+
     func addAccount(provider: MailProvider, displayName: String, emailAddress: String) {
         let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -992,6 +1071,7 @@ final class MailStore: ObservableObject {
 
     private func triggerBackgroundProviderSync() {
         guard networkMonitor.isOnline else { return }
+        guard preferences.isAnyAutoSyncEnabled else { return }
         logger.debug("Background provider sync tick triggered.", category: "MailStore")
         Task { [weak self] in
             await self?.runBackgroundProviderSync()
@@ -1053,6 +1133,7 @@ final class MailStore: ObservableObject {
 
     @MainActor
     private func backgroundSyncGmailIfConnected() async {
+        guard preferences.backgroundSyncGmailEnabled else { return }
         let gmailAccounts = accounts.filter { $0.provider == .gmail }
         guard !gmailAccounts.isEmpty else { return }
 
@@ -1091,6 +1172,7 @@ final class MailStore: ObservableObject {
 
     @MainActor
     private func backgroundSyncYahooAccounts() async {
+        guard preferences.backgroundSyncYahooEnabled else { return }
         let yahooAccounts = accounts.filter { $0.provider == .yahoo }
         guard !yahooAccounts.isEmpty else { return }
 
@@ -1117,6 +1199,7 @@ final class MailStore: ObservableObject {
 
     @MainActor
     private func backgroundSyncFastmailAccounts() async {
+        guard preferences.backgroundSyncFastmailEnabled else { return }
         let fastmailAccounts = accounts.filter { $0.provider == .fastmail }
         guard !fastmailAccounts.isEmpty else { return }
 

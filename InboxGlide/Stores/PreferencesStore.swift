@@ -98,6 +98,9 @@ final class PreferencesStore: ObservableObject {
         static let emailBodyDisplayMode = "appearance.emailBodyDisplayMode"
 
         static let unifiedInbox = "accounts.unifiedInbox"
+        static let backgroundSyncGmailEnabled = "accounts.backgroundSyncGmailEnabled"
+        static let backgroundSyncYahooEnabled = "accounts.backgroundSyncYahooEnabled"
+        static let backgroundSyncFastmailEnabled = "accounts.backgroundSyncFastmailEnabled"
         static let backgroundSyncIntervalSeconds = "accounts.backgroundSyncIntervalSeconds"
         static let backgroundGmailFetchCount = "accounts.backgroundGmailFetchCount"
         static let backgroundIMAPFetchCount = "accounts.backgroundIMAPFetchCount"
@@ -139,6 +142,9 @@ final class PreferencesStore: ObservableObject {
     @Published var fontScale: Double { didSet { defaults.set(fontScale, forKey: Keys.fontScale) } }
 
     @Published var unifiedInboxEnabled: Bool { didSet { defaults.set(unifiedInboxEnabled, forKey: Keys.unifiedInbox) } }
+    @Published var backgroundSyncGmailEnabled: Bool { didSet { defaults.set(backgroundSyncGmailEnabled, forKey: Keys.backgroundSyncGmailEnabled) } }
+    @Published var backgroundSyncYahooEnabled: Bool { didSet { defaults.set(backgroundSyncYahooEnabled, forKey: Keys.backgroundSyncYahooEnabled) } }
+    @Published var backgroundSyncFastmailEnabled: Bool { didSet { defaults.set(backgroundSyncFastmailEnabled, forKey: Keys.backgroundSyncFastmailEnabled) } }
     @Published var backgroundSyncIntervalSeconds: Int { didSet { defaults.set(backgroundSyncIntervalSeconds, forKey: Keys.backgroundSyncIntervalSeconds) } }
     @Published var backgroundGmailFetchCount: Int { didSet { defaults.set(backgroundGmailFetchCount, forKey: Keys.backgroundGmailFetchCount) } }
     @Published var backgroundIMAPFetchCount: Int { didSet { defaults.set(backgroundIMAPFetchCount, forKey: Keys.backgroundIMAPFetchCount) } }
@@ -194,6 +200,9 @@ final class PreferencesStore: ObservableObject {
         self.fontScale = defaults.object(forKey: Keys.fontScale) as? Double ?? 0
 
         self.unifiedInboxEnabled = defaults.object(forKey: Keys.unifiedInbox) as? Bool ?? true
+        self.backgroundSyncGmailEnabled = defaults.object(forKey: Keys.backgroundSyncGmailEnabled) as? Bool ?? true
+        self.backgroundSyncYahooEnabled = defaults.object(forKey: Keys.backgroundSyncYahooEnabled) as? Bool ?? true
+        self.backgroundSyncFastmailEnabled = defaults.object(forKey: Keys.backgroundSyncFastmailEnabled) as? Bool ?? true
         self.backgroundSyncIntervalSeconds = defaults.object(forKey: Keys.backgroundSyncIntervalSeconds) as? Int ?? 90
         self.backgroundGmailFetchCount = defaults.object(forKey: Keys.backgroundGmailFetchCount) as? Int ?? 60
         self.backgroundIMAPFetchCount = defaults.object(forKey: Keys.backgroundIMAPFetchCount) as? Int ?? 45
@@ -240,6 +249,10 @@ final class PreferencesStore: ObservableObject {
         case .comfortable: return 14
         case .spacious: return 18
         }
+    }
+
+    var isAnyAutoSyncEnabled: Bool {
+        backgroundSyncGmailEnabled || backgroundSyncYahooEnabled || backgroundSyncFastmailEnabled
     }
 
     private static func sanitizedAction(raw: String?, fallback: GlideAction) -> GlideAction {

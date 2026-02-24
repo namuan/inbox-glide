@@ -31,6 +31,15 @@ struct AccountsSettingsView: View {
                 Toggle("Enable unified inbox", isOn: $preferences.unifiedInboxEnabled)
             }
 
+            Section("Auto Sync") {
+                Toggle("Gmail", isOn: $preferences.backgroundSyncGmailEnabled)
+                Toggle("Yahoo", isOn: $preferences.backgroundSyncYahooEnabled)
+                Toggle("Fastmail", isOn: $preferences.backgroundSyncFastmailEnabled)
+                Text("Manual sync is always available per account.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Sync Tuning") {
                 Stepper(
                     "Background sync interval: \(preferences.backgroundSyncIntervalSeconds)s",
