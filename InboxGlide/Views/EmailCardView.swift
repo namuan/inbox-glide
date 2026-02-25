@@ -458,7 +458,7 @@ private struct EmailHTMLBodyView: NSViewRepresentable {
                 return .allow
             case "http", "https", "mailto":
                 if navigationAction.navigationType == .linkActivated {
-                    NSWorkspace.shared.open(url)
+                    NSWorkspace.shared.open(HTMLContentCleaner.untrackedDestination(from: url))
                 }
                 return .cancel
             default:
