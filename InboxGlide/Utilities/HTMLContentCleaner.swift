@@ -110,6 +110,10 @@ enum HTMLContentCleaner {
             return parsed
         }
 
+        if let parsed = decodeCustomerIOTrackedDestination(from: components) {
+            return parsed
+        }
+
         if let value = queryValue(in: components, forAnyOf: trackingQueryParameterNames),
            let parsed = parseCandidateURL(from: value) {
             return parsed
@@ -121,6 +125,25 @@ enum HTMLContentCleaner {
         }
 
         return nil
+    }
+
+    private static func decodeCustomerIOTrackedDestination(from components: URLComponents) -> URL? {
+        let segments = components.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard segments.count >= 3,
+              segments[0].lowercased() == "e",
+              segments[1].lowercased() == "c" else {
+            return nil
+        }
+
+        let payload = String(segments[2])
+        guard let payloadData = decodeBase64Data(payload),
+              let json = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+              let href = json["href"] as? String,
+              let parsed = parseCandidateURL(from: href) else {
+            return nil
+        }
+
+        return parsed
     }
 
     private static func parseURLFromQueryLikeString(_ value: String) -> URL? {
@@ -198,5 +221,25 @@ enum HTMLContentCleaner {
 
         let decoded = replaced.removingPercentEncoding ?? replaced
         return decoded.isEmpty ? nil : decoded
+    }
+
+    private static func decodeBase64Data(_ rawValue: String) -> Data? {
+        let normalized = normalizedCandidateValue(rawValue)
+        guard !normalized.isEmpty else { return nil }
+
+        if let data = Data(base64Encoded: normalized) {
+            return data
+        }
+
+        var urlSafe = normalized
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
+        let remainder = urlSafe.count % 4
+        if remainder != 0 {
+            urlSafe += String(repeating: "=", count: 4 - remainder)
+        }
+
+        return Data(base64Encoded: urlSafe)
     }
 }
