@@ -116,6 +116,7 @@ final class PreferencesStore: ObservableObject {
         static let aiSummaryLength = "ai.summaryLength"
         static let analyticsOptIn = "privacy.analyticsOptIn"
         static let crashOptIn = "privacy.crashOptIn"
+        static let blockTrackingPixels = "privacy.blockTrackingPixels"
         
         static let hasCompletedOnboarding = "onboarding.completed"
     }
@@ -161,6 +162,7 @@ final class PreferencesStore: ObservableObject {
 
     @Published var analyticsOptIn: Bool { didSet { defaults.set(analyticsOptIn, forKey: Keys.analyticsOptIn) } }
     @Published var crashReportingOptIn: Bool { didSet { defaults.set(crashReportingOptIn, forKey: Keys.crashOptIn) } }
+    @Published var blockTrackingPixels: Bool { didSet { defaults.set(blockTrackingPixels, forKey: Keys.blockTrackingPixels) } }
     
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) } }
 
@@ -218,6 +220,7 @@ final class PreferencesStore: ObservableObject {
         self.aiSummaryLength = AISummaryLength(rawValue: defaults.string(forKey: Keys.aiSummaryLength) ?? "") ?? .short
         self.analyticsOptIn = defaults.object(forKey: Keys.analyticsOptIn) as? Bool ?? false
         self.crashReportingOptIn = defaults.object(forKey: Keys.crashOptIn) as? Bool ?? false
+        self.blockTrackingPixels = defaults.object(forKey: Keys.blockTrackingPixels) as? Bool ?? true
         
         self.hasCompletedOnboarding = defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool ?? false
     }

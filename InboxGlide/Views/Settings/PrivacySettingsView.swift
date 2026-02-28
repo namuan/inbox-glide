@@ -9,6 +9,13 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         Form {
+            Section("Email Privacy") {
+                Toggle("Block tracking pixels", isOn: $preferences.blockTrackingPixels)
+                Text("Removes likely 1×1 and hidden tracker images before rendering email HTML.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Data") {
                 Button("Export Data (JSON)…") {
                     export()

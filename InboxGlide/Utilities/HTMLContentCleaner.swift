@@ -7,6 +7,12 @@ enum HTMLContentCleaner {
         "url", "u", "target", "dest", "destination", "redirect", "redir", "redirect_url",
         "redirect_uri", "to", "out", "continue", "next", "goto", "return", "returnto"
     ]
+    private static let trackingPixelURLKeywords = [
+        "pixel", "beacon", "track", "open", "read", "impression", "analytics", "metrics"
+    ]
+    private static let trackingPixelQueryNames = [
+        "open", "opened", "track", "tracking", "pixel", "beacon", "rid", "mid", "cid", "eid", "uid"
+    ]
 
     static func sanitizeHTML(_ rawHTML: String) -> String? {
         let trimmed = rawHTML.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -55,6 +61,12 @@ enum HTMLContentCleaner {
         } catch {
             return cleanText(rawHTML)
         }
+    }
+
+    static func sanitizeHTMLForDisplay(_ rawHTML: String, blockTrackingPixels: Bool) -> String? {
+        guard let sanitized = sanitizeHTML(rawHTML) else { return nil }
+        guard blockTrackingPixels else { return sanitized }
+        return removeLikelyTrackingPixels(fromHTML: sanitized)
     }
 
     static func cleanText(_ rawText: String) -> String {
@@ -241,5 +253,87 @@ enum HTMLContentCleaner {
         }
 
         return Data(base64Encoded: urlSafe)
+    }
+
+    private static func removeLikelyTrackingPixels(fromHTML html: String) -> String {
+        do {
+            let document = try SwiftSoup.parseBodyFragment(html)
+            let images = try document.select("img")
+
+            for image in images.array() {
+                if isLikelyTrackingPixel(image) {
+                    try image.remove()
+                }
+            }
+
+            return try document.body()?.html() ?? html
+        } catch {
+            return html
+        }
+    }
+
+    private static func isLikelyTrackingPixel(_ image: Element) -> Bool {
+        let width = pixelValue(from: try? image.attr("width"))
+        let height = pixelValue(from: try? image.attr("height"))
+        let style = (try? image.attr("style").lowercased()) ?? ""
+        let src = (try? image.attr("src")) ?? (try? image.attr("data-src")) ?? ""
+
+        let hiddenByStyle =
+            style.contains("display:none") ||
+            style.contains("visibility:hidden") ||
+            style.contains("opacity:0") ||
+            style.contains("width:0") ||
+            style.contains("height:0") ||
+            style.range(of: "width\\s*:\\s*1px", options: .regularExpression) != nil ||
+            style.range(of: "height\\s*:\\s*1px", options: .regularExpression) != nil
+
+        let tinyByDimensions: Bool = {
+            switch (width, height) {
+            case let (w?, h?): return w <= 2 && h <= 2
+            case let (w?, nil): return w <= 1
+            case let (nil, h?): return h <= 1
+            default: return false
+            }
+        }()
+
+        let normalizedSrc = normalizedCandidateValue(src)
+        let isRemoteImage =
+            normalizedSrc.lowercased().hasPrefix("http://") ||
+            normalizedSrc.lowercased().hasPrefix("https://") ||
+            normalizedSrc.hasPrefix("//")
+
+        let hasTrackerLikeURL = looksLikeTrackingPixelURL(normalizedSrc)
+
+        return hiddenByStyle || (tinyByDimensions && isRemoteImage) || (tinyByDimensions && hasTrackerLikeURL)
+    }
+
+    private static func looksLikeTrackingPixelURL(_ rawValue: String) -> Bool {
+        guard let url = parseCandidateURL(from: rawValue),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+
+        let host = components.host?.lowercased() ?? ""
+        let path = components.path.lowercased()
+        let queryItems = components.queryItems ?? []
+
+        let hasKeyword = trackingPixelURLKeywords.contains(where: { keyword in
+            host.contains(keyword) || path.contains(keyword)
+        })
+
+        let hasTrackingQuery = queryItems.contains { item in
+            trackingPixelQueryNames.contains(item.name.lowercased())
+        }
+
+        return hasKeyword && hasTrackingQuery
+    }
+
+    private static func pixelValue(from rawValue: String?) -> Int? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "px", with: "")
+        return Int(trimmed)
     }
 }

@@ -218,7 +218,10 @@ struct EmailCardView: View {
     private var sanitizedHTMLBody: String? {
         let value = message.htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !value.isEmpty else { return nil }
-        return value
+        return HTMLContentCleaner.sanitizeHTMLForDisplay(
+            value,
+            blockTrackingPixels: preferences.blockTrackingPixels
+        ) ?? value
     }
 
     @ViewBuilder
@@ -426,7 +429,7 @@ private struct EmailHTMLBodyView: NSViewRepresentable {
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:;">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: cid: https: http:;">
         <style>
         :root { color-scheme: light dark; }
         html, body {
