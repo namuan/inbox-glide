@@ -171,6 +171,20 @@ final class GmailAuthStore: ObservableObject {
         try await gmailService.archiveMessage(accessToken: accessToken, id: id)
     }
 
+    func sendReply(_ request: ReplySendRequest) async throws {
+        logger.info(
+            "Requesting Gmail reply send operation.",
+            category: "GmailAuth",
+            metadata: [
+                "email": request.account.emailAddress,
+                "threadID": request.threading.providerThreadID ?? "none"
+            ]
+        )
+        await restoreSessionIfNeeded()
+        let accessToken = try await currentAccessToken(for: request.account.emailAddress)
+        try await gmailService.sendReply(accessToken: accessToken, request: request)
+    }
+
     private func handleRedirect(_ url: URL) {
         guard let oauthService else { return }
         Task {

@@ -3,21 +3,23 @@
 ## Completed
 
 - [x] Task-001: Define Reply Send Contract in App Layer
+- [x] Task-002: Implement Gmail Provider Reply Send
 
 ## Current Iteration
 
-- Iteration: 1
-- Working on: Task-001 (complete, awaiting next assignment)
-- Started: 2026-03-03T00:00:00Z
+- Iteration: 2
+- Working on: Task-002 (complete, awaiting next assignment)
+- Started: 2026-03-03T19:35:00Z
 
 ## Last Completed
 
-- Task-001: Define Reply Send Contract in App Layer
+- Task-002: Implement Gmail Provider Reply Send
 - Verification: `xcodebuild -project InboxGlide.xcodeproj -scheme InboxGlide -configuration Debug -destination "platform=macOS" build` ✅
 - Key decisions:
-	- Added `MailStore.sendReply(messageID:composerMode:body:)` as the single send entry point.
-	- Kept provider dispatch out of scope; entry point currently validates/builds app-layer send contract.
-	- Routed both composer modes (`.reply` and `.aiReply`) through the same contract path.
+	- Added Gmail reply send via `users/me/messages/send` with RFC822 payload encoding and threading support (`threadId`, `In-Reply-To`, `References`) when metadata is available.
+	- Reused existing Gmail OAuth restore/refresh flow by adding `GmailAuthStore.sendReply(_:)`.
+	- Upgraded `MailStore.sendReply` to perform provider dispatch for Gmail and surface actionable user-facing errors; non-Gmail now returns explicit not-supported messaging for now.
+	- Preserved current composer success behavior (existing archive path) to keep Task-002 scope focused on provider send wiring.
 
 ## Blockers
 
@@ -25,5 +27,6 @@
 
 ## Notes for Next Iteration
 
-- Implement provider-aware dispatch from `MailStore.sendReply` (Task-002+).
-- `ReplyComposerView` now calls `sendReply`; success path intentionally preserves existing local archive stub behavior until provider send is implemented.
+- Task-003: Update composer success behavior to keep message in inbox and mark `isRead = true` after send (currently still archives on success).
+- Task-003: Add send-in-progress guard in composer to prevent duplicate sends.
+- Task-004: Replace current non-Gmail reply send placeholder behavior with explicit provider-specific UX/notice requirements.

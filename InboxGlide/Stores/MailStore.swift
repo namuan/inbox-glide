@@ -31,6 +31,17 @@ enum ComposerMode: String {
     case aiReply
 }
 
+enum ReplyProviderSendError: LocalizedError {
+    case notSupported(MailProvider)
+
+    var errorDescription: String? {
+        switch self {
+        case .notSupported(let provider):
+            return "Reply send is not available for \(provider.displayName) yet."
+        }
+    }
+}
+
 struct ComposerPresentation: Identifiable {
     let id = UUID()
     let messageID: UUID
@@ -254,7 +265,7 @@ final class MailStore: ObservableObject {
         messageID: UUID,
         composerMode: ComposerMode,
         body: String
-    ) -> Result<ReplySendRequest, ReplySendPreparationError> {
+    ) async -> Bool {
         let result = makeReplySendRequest(
             messageID: messageID,
             composerMode: composerMode,
@@ -272,7 +283,35 @@ final class MailStore: ObservableObject {
                     "mode": composerMode.rawValue
                 ]
             )
-            return .success(request)
+            do {
+                try await sendReplyOnProvider(request)
+                logger.info(
+                    "Reply sent through provider.",
+                    category: "MailStore",
+                    metadata: [
+                        "messageID": messageID.uuidString,
+                        "provider": request.account.provider.rawValue,
+                        "mode": composerMode.rawValue
+                    ]
+                )
+                return true
+            } catch {
+                logger.error(
+                    "Reply send failed on provider.",
+                    category: "MailStore",
+                    metadata: [
+                        "messageID": messageID.uuidString,
+                        "provider": request.account.provider.rawValue,
+                        "mode": composerMode.rawValue,
+                        "error": error.localizedDescription
+                    ]
+                )
+                errorAlert = ErrorAlert(
+                    title: "Reply Not Sent",
+                    message: Self.replySendErrorMessage(for: error, provider: request.account.provider)
+                )
+                return false
+            }
 
         case .failure(let error):
             logger.warning(
@@ -288,7 +327,7 @@ final class MailStore: ObservableObject {
                 title: "Reply Not Sent",
                 message: error.localizedDescription
             )
-            return .failure(error)
+            return false
         }
     }
 
@@ -329,7 +368,12 @@ final class MailStore: ObservableObject {
             body: trimmedBody,
             threading: ReplyProviderThreadingIdentifiers(
                 providerMessageID: message.providerMessageID,
-                providerThreadID: message.providerThreadID
+                providerThreadID: message.providerThreadID,
+                inReplyToMessageID: message.providerMessageHeaderID ?? message.providerInReplyToMessageID,
+                referenceMessageIDs: Self.combineReferenceMessageIDs(
+                    message.providerReferenceMessageIDs ?? [],
+                    include: message.providerMessageHeaderID
+                )
             )
         )
 
@@ -499,6 +543,9 @@ final class MailStore: ObservableObject {
         for item in items {
             if let existingIndex = indexByProviderID[item.id] {
                 messages[existingIndex].providerThreadID = item.threadID
+                messages[existingIndex].providerMessageHeaderID = item.messageHeaderID
+                messages[existingIndex].providerInReplyToMessageID = item.inReplyToMessageID
+                messages[existingIndex].providerReferenceMessageIDs = item.referenceMessageIDs
                 messages[existingIndex].receivedAt = item.receivedAt
                 messages[existingIndex].senderName = item.senderName
                 messages[existingIndex].senderEmail = item.senderEmail
@@ -520,6 +567,9 @@ final class MailStore: ObservableObject {
                 accountID: account.id,
                 providerMessageID: item.id,
                 providerThreadID: item.threadID,
+                providerMessageHeaderID: item.messageHeaderID,
+                providerInReplyToMessageID: item.inReplyToMessageID,
+                providerReferenceMessageIDs: item.referenceMessageIDs,
                 receivedAt: item.receivedAt,
                 senderName: item.senderName,
                 senderEmail: item.senderEmail,
@@ -1002,6 +1052,37 @@ final class MailStore: ObservableObject {
         return "Re: \(trimmed)"
     }
 
+    private static func combineReferenceMessageIDs(_ baseIDs: [String], include messageID: String?) -> [String] {
+        var combined = baseIDs
+        if let messageID, !messageID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            combined.append(messageID)
+        }
+
+        var seen = Set<String>()
+        var deduplicated: [String] = []
+        for item in combined {
+            let normalized = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else {
+                continue
+            }
+            deduplicated.append(normalized)
+        }
+        return deduplicated
+    }
+
+    private static func replySendErrorMessage(for error: Error, provider: MailProvider) -> String {
+        if let providerError = error as? ReplyProviderSendError {
+            return providerError.localizedDescription
+        }
+        if let gmailError = error as? GmailServiceError {
+            return gmailError.localizedDescription
+        }
+        if let oauthError = error as? OAuthServiceError {
+            return oauthError.localizedDescription
+        }
+        return "Could not send reply through \(provider.displayName). \(error.localizedDescription)"
+    }
+
     private func nextColorHex() -> String {
         let palette = [
             "#2563EB", "#16A34A", "#F97316", "#DC2626", "#0EA5E9",
@@ -1330,6 +1411,15 @@ final class MailStore: ObservableObject {
                     metadata: ["email": account.emailAddress, "error": error.localizedDescription]
                 )
             }
+        }
+    }
+
+    private func sendReplyOnProvider(_ request: ReplySendRequest) async throws {
+        switch request.account.provider {
+        case .gmail:
+            try await gmailAuthStore.sendReply(request)
+        case .yahoo, .fastmail:
+            throw ReplyProviderSendError.notSupported(request.account.provider)
         }
     }
 

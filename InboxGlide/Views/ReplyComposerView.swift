@@ -72,18 +72,17 @@ struct ReplyComposerView: View {
                         NSPasteboard.general.setString(bodyText, forType: .string)
                     }
                     Button("Send") {
-                        let result = mailStore.sendReply(
-                            messageID: presentation.messageID,
-                            composerMode: presentation.mode,
-                            body: bodyText
-                        )
+                        Task {
+                            let didSend = await mailStore.sendReply(
+                                messageID: presentation.messageID,
+                                composerMode: presentation.mode,
+                                body: bodyText
+                            )
 
-                        switch result {
-                        case .success:
-                            mailStore.perform(action: .archive, isSecondary: false, messageID: message.id)
-                            dismiss()
-                        case .failure:
-                            break
+                            if didSend {
+                                mailStore.perform(action: .archive, isSecondary: false, messageID: message.id)
+                                dismiss()
+                            }
                         }
                     }
                     .keyboardShortcut(.defaultAction)
