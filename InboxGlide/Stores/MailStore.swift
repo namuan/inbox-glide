@@ -100,6 +100,7 @@ final class MailStore: ObservableObject {
 
     private var saveWorkItem: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "InboxGlide.MailStore.Save", qos: .utility)
+    private var deckRebuildWorkItem: DispatchWorkItem?
     private var refreshTimer: Timer?
     private var providerSyncTimer: Timer?
     private var isBackgroundSyncInProgress = false
@@ -196,23 +197,21 @@ final class MailStore: ObservableObject {
         let now = Date()
         let unified = preferences.unifiedInboxEnabled
 
+        let firstAccountID = accounts.first?.id
         let visible = messages
-            .filter { $0.deletedAt == nil }
-            .filter { $0.archivedAt == nil }
-            .filter { ($0.snoozedUntil ?? .distantPast) <= now }
-            .filter { !blockedSenders.contains($0.senderEmail.lowercased()) }
             .filter { msg in
-                guard let category = selectedCategory else { return true }
-                return msg.category == category
-            }
-            .filter { msg in
+                guard msg.deletedAt == nil,
+                      msg.archivedAt == nil,
+                      (msg.snoozedUntil ?? .distantPast) <= now,
+                      !blockedSenders.contains(msg.senderEmail.lowercased())
+                else { return false }
+                if let category = selectedCategory, msg.category != category { return false }
                 if unified {
                     if let selected = selectedAccountID { return msg.accountID == selected }
                     return true
                 }
-                // If unified inbox disabled, fall back to first account.
                 if let selected = selectedAccountID { return msg.accountID == selected }
-                return msg.accountID == accounts.first?.id
+                return msg.accountID == firstAccountID
             }
             .sorted(by: { $0.receivedAt > $1.receivedAt })
 
@@ -638,7 +637,7 @@ final class MailStore: ObservableObject {
             ]
         )
         scheduleSave()
-        rebuildDeck()
+        scheduleDeckRebuild()
     }
 
     func syncYahooInbox(for emailAddress: String, maxResults: Int = 30) async throws {
@@ -799,7 +798,7 @@ final class MailStore: ObservableObject {
             ]
         )
         scheduleSave()
-        rebuildDeck()
+        scheduleDeckRebuild()
     }
 
     func syncFastmailInbox(for emailAddress: String, maxResults: Int = 30) async throws {
@@ -960,7 +959,7 @@ final class MailStore: ObservableObject {
             ]
         )
         scheduleSave()
-        rebuildDeck()
+        scheduleDeckRebuild()
     }
 
     func applyMoveToFolder(_ folder: String, messageID: UUID) {
@@ -1061,6 +1060,15 @@ final class MailStore: ObservableObject {
         }
         saveWorkItem = item
         saveQueue.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+
+    private func scheduleDeckRebuild() {
+        deckRebuildWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.rebuildDeck()
+        }
+        deckRebuildWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
     }
 
     private static func category(for labels: [String]) -> MessageCategory? {
