@@ -37,7 +37,14 @@ enum ReplyProviderSendError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notSupported(let provider):
-            return "Reply send is not available for \(provider.displayName) yet."
+            switch provider {
+            case .yahoo:
+                return "Sending replies from Yahoo accounts is not supported yet."
+            case .fastmail:
+                return "Sending replies from Fastmail accounts is not supported yet."
+            case .gmail:
+                return "Reply send is available for Gmail accounts."
+            }
         }
     }
 }
@@ -280,6 +287,7 @@ final class MailStore: ObservableObject {
                 metadata: [
                     "messageID": messageID.uuidString,
                     "provider": request.account.provider.rawValue,
+                    "email": request.account.emailAddress,
                     "mode": composerMode.rawValue
                 ]
             )
@@ -294,23 +302,38 @@ final class MailStore: ObservableObject {
                     metadata: [
                         "messageID": messageID.uuidString,
                         "provider": request.account.provider.rawValue,
+                        "email": request.account.emailAddress,
                         "mode": composerMode.rawValue
                     ]
                 )
                 return true
             } catch {
-                logger.error(
-                    "Reply send failed on provider.",
-                    category: "MailStore",
-                    metadata: [
-                        "messageID": messageID.uuidString,
-                        "provider": request.account.provider.rawValue,
-                        "mode": composerMode.rawValue,
-                        "error": error.localizedDescription
-                    ]
-                )
+                if error is ReplyProviderSendError {
+                    logger.warning(
+                        "Reply send is not supported for provider in this phase.",
+                        category: "MailStore",
+                        metadata: [
+                            "messageID": messageID.uuidString,
+                            "provider": request.account.provider.rawValue,
+                            "email": request.account.emailAddress,
+                            "mode": composerMode.rawValue
+                        ]
+                    )
+                } else {
+                    logger.error(
+                        "Reply send failed on provider.",
+                        category: "MailStore",
+                        metadata: [
+                            "messageID": messageID.uuidString,
+                            "provider": request.account.provider.rawValue,
+                            "email": request.account.emailAddress,
+                            "mode": composerMode.rawValue,
+                            "error": error.localizedDescription
+                        ]
+                    )
+                }
                 errorAlert = ErrorAlert(
-                    title: "Reply Not Sent",
+                    title: error is ReplyProviderSendError ? "\(request.account.provider.displayName) Reply Not Supported" : "Reply Not Sent",
                     message: Self.replySendErrorMessage(for: error, provider: request.account.provider)
                 )
                 return false
