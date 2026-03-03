@@ -72,9 +72,19 @@ struct ReplyComposerView: View {
                         NSPasteboard.general.setString(bodyText, forType: .string)
                     }
                     Button("Send") {
-                        // Stub send: archive message locally.
-                        mailStore.perform(action: .archive, isSecondary: false, messageID: message.id)
-                        dismiss()
+                        let result = mailStore.sendReply(
+                            messageID: presentation.messageID,
+                            composerMode: presentation.mode,
+                            body: bodyText
+                        )
+
+                        switch result {
+                        case .success:
+                            mailStore.perform(action: .archive, isSecondary: false, messageID: message.id)
+                            dismiss()
+                        case .failure:
+                            break
+                        }
                     }
                     .keyboardShortcut(.defaultAction)
                 }

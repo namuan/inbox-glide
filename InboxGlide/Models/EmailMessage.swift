@@ -26,6 +26,7 @@ struct EmailMessage: Identifiable, Codable, Hashable {
     var id: UUID
     var accountID: UUID
     var providerMessageID: String? = nil
+    var providerThreadID: String? = nil
 
     var receivedAt: Date
     var senderName: String

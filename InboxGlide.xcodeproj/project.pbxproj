@@ -17,6 +17,7 @@
 		4CC18CF0535343AE6EE9F885 /* MailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B597D048430A6634B70A88DB /* MailStore.swift */; };
 		4E2AF4CA54CFF60CA99689BE /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51BCA5D1AA98EB2D03736440 /* Account.swift */; };
 		51351536E1494BAC3550551E /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34AE5B8897D83A21595F3D08 /* AISettingsView.swift */; };
+		5A11B5F1C9D84712A7E44C0B /* ReplySendRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2F4398A76414AA7C515F1 /* ReplySendRequest.swift */; };
 		540A1B82B7DB249AE553FDCD /* YahooCredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DAD9FBA2FA1F08311768CCC /* YahooCredentialsStore.swift */; };
 		64132B9CE1C376B7379F72F5 /* OAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1860A8F65B9134EB54FACE /* OAuthService.swift */; };
 		65E75CB532F210A695D57A77 /* YahooService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B8CFE31781BC4692469556 /* YahooService.swift */; };
@@ -104,6 +105,7 @@
 		B82E4899D71A77E2BF76C92A /* GlideDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideDirection.swift; sourceTree = "<group>"; };
 		B91F0D0E1A723FFA83BC21D4 /* IMAPNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPNativeClient.swift; sourceTree = "<group>"; };
 		B975779EE9A0FB104A8E3EAE /* EmailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSummary.swift; sourceTree = "<group>"; };
+		C9D2F4398A76414AA7C515F1 /* ReplySendRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplySendRequest.swift; sourceTree = "<group>"; };
 		C2B5F3362D7625879C0F0BD6 /* EmailDurationBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailDurationBucket.swift; sourceTree = "<group>"; };
 		CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D771376BDD2506E57485BAB3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 				396CBED8A1E438A4FC8F6E43 /* GlideAction.swift */,
 				B82E4899D71A77E2BF76C92A /* GlideDirection.swift */,
 				0CE6C73F3A76C08EC9A23C7F /* QueuedMailAction.swift */,
+				C9D2F4398A76414AA7C515F1 /* ReplySendRequest.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -358,6 +361,7 @@
 				BF1E83FBB361FFAE8A947564 /* RFC822BodyExtractor.swift in Sources */,
 				75DFDA1796D1F7B0D297D2D1 /* RemindersService.swift in Sources */,
 				0B88CB125F7F9FA13FF2B717 /* ReplyComposerView.swift in Sources */,
+				5A11B5F1C9D84712A7E44C0B /* ReplySendRequest.swift in Sources */,
 				FFBE93EF3DE2B4D1550F7C47 /* RootView.swift in Sources */,
 				424CB7AE37948A478716FC47 /* SettingsView.swift in Sources */,
 				3AE0EFCFF27DCB35A9E3FB5B /* SidebarView.swift in Sources */,

@@ -249,6 +249,102 @@ final class MailStore: ObservableObject {
         scheduleSave()
     }
 
+    @discardableResult
+    func sendReply(
+        messageID: UUID,
+        composerMode: ComposerMode,
+        body: String
+    ) -> Result<ReplySendRequest, ReplySendPreparationError> {
+        let result = makeReplySendRequest(
+            messageID: messageID,
+            composerMode: composerMode,
+            body: body
+        )
+
+        switch result {
+        case .success(let request):
+            logger.info(
+                "Reply send entry point invoked.",
+                category: "MailStore",
+                metadata: [
+                    "messageID": messageID.uuidString,
+                    "provider": request.account.provider.rawValue,
+                    "mode": composerMode.rawValue
+                ]
+            )
+            return .success(request)
+
+        case .failure(let error):
+            logger.warning(
+                "Reply send request validation failed.",
+                category: "MailStore",
+                metadata: [
+                    "messageID": messageID.uuidString,
+                    "mode": composerMode.rawValue,
+                    "error": error.localizedDescription
+                ]
+            )
+            errorAlert = ErrorAlert(
+                title: "Reply Not Sent",
+                message: error.localizedDescription
+            )
+            return .failure(error)
+        }
+    }
+
+    private func makeReplySendRequest(
+        messageID: UUID,
+        composerMode: ComposerMode,
+        body: String
+    ) -> Result<ReplySendRequest, ReplySendPreparationError> {
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBody.isEmpty else {
+            return .failure(.emptyBody)
+        }
+
+        guard let message = messages.first(where: { $0.id == messageID }) else {
+            return .failure(.messageNotFound)
+        }
+
+        guard let account = accounts.first(where: { $0.id == message.accountID }) else {
+            return .failure(.accountNotFound)
+        }
+
+        let recipientEmail = message.senderEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !recipientEmail.isEmpty else {
+            return .failure(.recipientMissing)
+        }
+
+        let request = ReplySendRequest(
+            account: ReplySendAccount(
+                id: account.id,
+                provider: account.provider,
+                emailAddress: account.emailAddress
+            ),
+            recipient: ReplyRecipient(
+                name: message.senderName,
+                emailAddress: recipientEmail
+            ),
+            subject: Self.replySubject(for: message.subject),
+            body: trimmedBody,
+            threading: ReplyProviderThreadingIdentifiers(
+                providerMessageID: message.providerMessageID,
+                providerThreadID: message.providerThreadID
+            )
+        )
+
+        logger.debug(
+            "Prepared reply send request.",
+            category: "MailStore",
+            metadata: [
+                "messageID": messageID.uuidString,
+                "provider": account.provider.rawValue,
+                "mode": composerMode.rawValue
+            ]
+        )
+        return .success(request)
+    }
+
     func syncAccountNow(_ account: MailAccount) async {
         guard networkMonitor.isOnline else {
             await MainActor.run {
@@ -402,6 +498,7 @@ final class MailStore: ObservableObject {
 
         for item in items {
             if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].providerThreadID = item.threadID
                 messages[existingIndex].receivedAt = item.receivedAt
                 messages[existingIndex].senderName = item.senderName
                 messages[existingIndex].senderEmail = item.senderEmail
@@ -422,6 +519,7 @@ final class MailStore: ObservableObject {
                 id: UUID(),
                 accountID: account.id,
                 providerMessageID: item.id,
+                providerThreadID: item.threadID,
                 receivedAt: item.receivedAt,
                 senderName: item.senderName,
                 senderEmail: item.senderEmail,
@@ -891,6 +989,17 @@ final class MailStore: ObservableObject {
         if set.contains("CATEGORY_SOCIAL") { return .social }
         if set.contains("CATEGORY_PRIMARY") { return .work }
         return nil
+    }
+
+    private static func replySubject(for originalSubject: String) -> String {
+        let trimmed = originalSubject.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "Re: (No Subject)"
+        }
+        if trimmed.lowercased().hasPrefix("re:") {
+            return trimmed
+        }
+        return "Re: \(trimmed)"
     }
 
     private func nextColorHex() -> String {
