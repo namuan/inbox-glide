@@ -539,3 +539,283 @@ actor IMAPNativeClient: MailClient {
         return "\"\(escaped)\""
     }
 }
+
+struct SMTPProviderConfig {
+    let hostname: String
+    let port: UInt16
+    let usesTLS: Bool
+}
+
+struct SMTPCredentials {
+    let username: String
+    let password: String
+}
+
+enum SMTPClientError: LocalizedError {
+    case connectionFailed
+    case disconnected
+    case authenticationFailed
+    case invalidResponse(String)
+    case sendFailed(statusCode: Int, message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .connectionFailed:
+            return "Failed to connect to SMTP server."
+        case .disconnected:
+            return "SMTP connection closed unexpectedly."
+        case .authenticationFailed:
+            return "SMTP authentication failed. Check your email/app password."
+        case .invalidResponse(let message):
+            return message
+        case .sendFailed(let statusCode, let message):
+            if message.isEmpty {
+                return "SMTP send failed (status \(statusCode))."
+            }
+            return "SMTP send failed (status \(statusCode)): \(message)"
+        }
+    }
+}
+
+actor SMTPNativeClient {
+    private struct SMTPResponse {
+        let statusCode: Int
+        let lines: [String]
+
+        var message: String {
+            lines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private let config: SMTPProviderConfig
+    private let credentials: SMTPCredentials
+    private let logger = AppLogger.shared
+    private let commandTimeoutSeconds: Double = 35
+
+    private var connection: NWConnection?
+    private var receiveBuffer = Data()
+
+    init(config: SMTPProviderConfig, credentials: SMTPCredentials) {
+        self.config = config
+        self.credentials = credentials
+    }
+
+    func sendMail(from: String, recipients: [String], rfc822: String) async throws {
+        let cleanFrom = from.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanRecipients = recipients
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !cleanFrom.isEmpty, !cleanRecipients.isEmpty else {
+            throw SMTPClientError.invalidResponse("Missing sender or recipient for SMTP send.")
+        }
+
+        let startedAt = Date()
+        do {
+            try await connect()
+            _ = try await sendCommand("EHLO inboxglide.local", expectedStatusCodes: [250])
+            try await authenticate()
+            _ = try await sendCommand("MAIL FROM:<\(cleanFrom)>", expectedStatusCodes: [250])
+            for recipient in cleanRecipients {
+                _ = try await sendCommand("RCPT TO:<\(recipient)>", expectedStatusCodes: [250, 251])
+            }
+            _ = try await sendCommand("DATA", expectedStatusCodes: [354])
+            try await sendRaw(dotStuffedMessage(rfc822) + "\r\n.\r\n")
+            let queuedResponse = try await readResponse()
+            guard queuedResponse.statusCode == 250 else {
+                throw SMTPClientError.sendFailed(statusCode: queuedResponse.statusCode, message: queuedResponse.message)
+            }
+            _ = try? await sendCommand("QUIT", expectedStatusCodes: [221])
+            await disconnect()
+
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.info(
+                "SMTP message submitted.",
+                category: "SMTP",
+                metadata: [
+                    "host": config.hostname,
+                    "port": "\(config.port)",
+                    "recipientCount": "\(cleanRecipients.count)",
+                    "durationMs": "\(durationMs)"
+                ]
+            )
+        } catch let error as SMTPClientError {
+            await disconnect()
+            throw error
+        } catch {
+            await disconnect()
+            throw SMTPClientError.connectionFailed
+        }
+    }
+
+    private func connect() async throws {
+        if connection != nil { return }
+        let port = NWEndpoint.Port(rawValue: config.port) ?? NWEndpoint.Port(rawValue: 465)!
+        let parameters: NWParameters = config.usesTLS ? .tls : .tcp
+        let connection = NWConnection(host: NWEndpoint.Host(config.hostname), port: port, using: parameters)
+        self.connection = connection
+        receiveBuffer = Data()
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.stateUpdateHandler = { (state: NWConnection.State) in
+                switch state {
+                case .ready:
+                    connection.stateUpdateHandler = nil
+                    continuation.resume()
+                case .failed(let error):
+                    connection.stateUpdateHandler = nil
+                    continuation.resume(throwing: error)
+                case .cancelled:
+                    connection.stateUpdateHandler = nil
+                    continuation.resume(throwing: SMTPClientError.connectionFailed)
+                default:
+                    break
+                }
+            }
+            connection.start(queue: .global(qos: .userInitiated))
+        }
+
+        let greeting = try await readResponse()
+        guard greeting.statusCode == 220 else {
+            throw SMTPClientError.invalidResponse("Unexpected SMTP greeting status: \(greeting.statusCode)")
+        }
+    }
+
+    private func authenticate() async throws {
+        _ = try await sendCommand("AUTH LOGIN", expectedStatusCodes: [334])
+        _ = try await sendCommand(base64(credentials.username), expectedStatusCodes: [334])
+        let passwordResponse = try await sendCommand(base64(credentials.password), expectedStatusCodes: [235])
+        guard passwordResponse.statusCode == 235 else {
+            throw SMTPClientError.authenticationFailed
+        }
+    }
+
+    private func sendCommand(_ command: String, expectedStatusCodes: Set<Int>) async throws -> SMTPResponse {
+        try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
+            try await self.sendRaw(command + "\r\n")
+            let response = try await self.readResponse()
+            guard expectedStatusCodes.contains(response.statusCode) else {
+                if response.statusCode == 535 {
+                    throw SMTPClientError.authenticationFailed
+                }
+                throw SMTPClientError.sendFailed(statusCode: response.statusCode, message: response.message)
+            }
+            return response
+        }
+    }
+
+    private func sendRaw(_ string: String) async throws {
+        guard let connection else {
+            throw SMTPClientError.disconnected
+        }
+        let data = Data(string.utf8)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: data, completion: .contentProcessed { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume()
+            })
+        }
+    }
+
+    private func readResponse() async throws -> SMTPResponse {
+        var lines: [String] = []
+        var expectedPrefix: String?
+
+        while true {
+            let line = try await readLine()
+            guard line.count >= 3 else {
+                throw SMTPClientError.invalidResponse("Malformed SMTP response line.")
+            }
+            let prefix = String(line.prefix(3))
+            guard let statusCode = Int(prefix) else {
+                throw SMTPClientError.invalidResponse("Invalid SMTP status code.")
+            }
+            if expectedPrefix == nil {
+                expectedPrefix = prefix
+            }
+            lines.append(line)
+
+            let separatorIndex = line.index(line.startIndex, offsetBy: 3)
+            let separator = separatorIndex < line.endIndex ? line[separatorIndex] : " "
+            if separator != "-" {
+                return SMTPResponse(statusCode: statusCode, lines: lines)
+            }
+        }
+    }
+
+    private func readLine() async throws -> String {
+        while true {
+            if let range = receiveBuffer.range(of: Data("\r\n".utf8)) {
+                let lineData = receiveBuffer.subdata(in: 0..<range.lowerBound)
+                receiveBuffer.removeSubrange(0..<range.upperBound)
+                return String(data: lineData, encoding: .utf8) ?? String(decoding: lineData, as: UTF8.self)
+            }
+            let chunk = try await receiveChunk()
+            receiveBuffer.append(chunk)
+        }
+    }
+
+    private func receiveChunk() async throws -> Data {
+        guard let connection else {
+            throw SMTPClientError.disconnected
+        }
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let data, !data.isEmpty else {
+                    if isComplete {
+                        continuation.resume(throwing: SMTPClientError.disconnected)
+                    } else {
+                        continuation.resume(returning: Data())
+                    }
+                    return
+                }
+                continuation.resume(returning: data)
+            }
+        }
+    }
+
+    private func disconnect() async {
+        connection?.cancel()
+        connection = nil
+        receiveBuffer = Data()
+    }
+
+    private func base64(_ value: String) -> String {
+        Data(value.utf8).base64EncodedString()
+    }
+
+    private func dotStuffedMessage(_ message: String) -> String {
+        let normalized = message
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in
+                line.hasPrefix(".") ? "." + line : String(line)
+            }
+            .joined(separator: "\r\n")
+        return normalized
+    }
+
+    private func withTimeout<T>(seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw SMTPClientError.invalidResponse("SMTP command timed out after \(Int(seconds))s.")
+            }
+            guard let result = try await group.next() else {
+                throw SMTPClientError.invalidResponse("SMTP command timed out.")
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+}

@@ -743,6 +743,9 @@ final class MailStore: ObservableObject {
 
         for item in items {
             if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].providerMessageHeaderID = item.messageHeaderID
+                messages[existingIndex].providerInReplyToMessageID = item.inReplyToMessageID
+                messages[existingIndex].providerReferenceMessageIDs = item.referenceMessageIDs
                 messages[existingIndex].receivedAt = item.receivedAt
                 messages[existingIndex].senderName = item.senderName
                 messages[existingIndex].senderEmail = item.senderEmail
@@ -763,6 +766,9 @@ final class MailStore: ObservableObject {
                 id: UUID(),
                 accountID: account.id,
                 providerMessageID: item.id,
+                providerMessageHeaderID: item.messageHeaderID,
+                providerInReplyToMessageID: item.inReplyToMessageID,
+                providerReferenceMessageIDs: item.referenceMessageIDs,
                 receivedAt: item.receivedAt,
                 senderName: item.senderName,
                 senderEmail: item.senderEmail,
@@ -904,6 +910,9 @@ final class MailStore: ObservableObject {
 
         for item in items {
             if let existingIndex = indexByProviderID[item.id] {
+                messages[existingIndex].providerMessageHeaderID = item.messageHeaderID
+                messages[existingIndex].providerInReplyToMessageID = item.inReplyToMessageID
+                messages[existingIndex].providerReferenceMessageIDs = item.referenceMessageIDs
                 messages[existingIndex].receivedAt = item.receivedAt
                 messages[existingIndex].senderName = item.senderName
                 messages[existingIndex].senderEmail = item.senderEmail
@@ -924,6 +933,9 @@ final class MailStore: ObservableObject {
                 id: UUID(),
                 accountID: account.id,
                 providerMessageID: item.id,
+                providerMessageHeaderID: item.messageHeaderID,
+                providerInReplyToMessageID: item.inReplyToMessageID,
+                providerReferenceMessageIDs: item.referenceMessageIDs,
                 receivedAt: item.receivedAt,
                 senderName: item.senderName,
                 senderEmail: item.senderEmail,
@@ -1118,8 +1130,17 @@ final class MailStore: ObservableObject {
         if let gmailError = error as? GmailServiceError {
             return gmailError.localizedDescription
         }
+        if let yahooError = error as? YahooServiceError {
+            return yahooError.localizedDescription
+        }
+        if let fastmailError = error as? FastmailServiceError {
+            return fastmailError.localizedDescription
+        }
         if let oauthError = error as? OAuthServiceError {
             return oauthError.localizedDescription
+        }
+        if let smtpError = error as? SMTPClientError {
+            return smtpError.localizedDescription
         }
         return "Could not send reply through \(provider.displayName). \(error.localizedDescription)"
     }
@@ -1459,8 +1480,20 @@ final class MailStore: ObservableObject {
         switch request.account.provider {
         case .gmail:
             try await gmailAuthStore.sendReply(request)
-        case .yahoo, .fastmail:
-            throw ReplyProviderSendError.notSupported(request.account.provider)
+        case .yahoo:
+            let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: request.account.emailAddress)
+            try await yahooService.sendReply(
+                emailAddress: request.account.emailAddress,
+                appPassword: appPassword,
+                request: request
+            )
+        case .fastmail:
+            let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: request.account.emailAddress)
+            try await fastmailService.sendReply(
+                emailAddress: request.account.emailAddress,
+                appPassword: appPassword,
+                request: request
+            )
         }
     }
 

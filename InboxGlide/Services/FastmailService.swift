@@ -2,6 +2,9 @@ import Foundation
 
 struct FastmailInboxMessage: Sendable {
     let id: String
+    let messageHeaderID: String?
+    let inReplyToMessageID: String?
+    let referenceMessageIDs: [String]
     let receivedAt: Date
     let senderName: String
     let senderEmail: String
@@ -25,6 +28,7 @@ enum FastmailServiceError: LocalizedError {
     case messageNotFound(String)
     case connectionFailed(String)
     case parseFailed(String)
+    case sendFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -33,6 +37,8 @@ enum FastmailServiceError: LocalizedError {
         case .connectionFailed(let message):
             return message
         case .parseFailed(let message):
+            return message
+        case .sendFailed(let message):
             return message
         }
     }
@@ -48,6 +54,11 @@ final class FastmailService {
         port: 993,
         usesTLS: true,
         supportsIDLE: true
+    )
+    private let smtpConfig = SMTPProviderConfig(
+        hostname: "smtp.fastmail.com",
+        port: 465,
+        usesTLS: true
     )
 
     func fetchRecentInboxMessages(emailAddress: String, appPassword: String, maxResults: Int = 25) async throws -> [FastmailInboxMessage] {
@@ -247,12 +258,35 @@ final class FastmailService {
         }
     }
 
+    func sendReply(emailAddress: String, appPassword: String, request: ReplySendRequest) async throws {
+        let credentials = SMTPCredentials(username: emailAddress, password: appPassword)
+        let client = SMTPNativeClient(config: smtpConfig, credentials: credentials)
+        let rfc822 = ReplyRFC822Builder.buildReply(from: request, includeFromHeader: true)
+        do {
+            try await client.sendMail(
+                from: emailAddress,
+                recipients: [request.recipient.emailAddress],
+                rfc822: rfc822
+            )
+            logger.info(
+                "Sent Fastmail reply over SMTP.",
+                category: "FastmailAPI",
+                metadata: ["email": emailAddress]
+            )
+        } catch let error as SMTPClientError {
+            throw FastmailServiceError.sendFailed(Self.userFacingSendError(for: error))
+        }
+    }
+
     private func parseFastmailMessage(from fetched: IMAPFetchedMessage) -> FastmailInboxMessage {
         let parsed = FastmailParsedRFC822Message.parse(from: fetched.rawRFC822)
         let flags = fetched.flags
 
         return FastmailInboxMessage(
             id: fetched.uid,
+            messageHeaderID: parsed.messageHeaderID,
+            inReplyToMessageID: parsed.inReplyToMessageID,
+            referenceMessageIDs: parsed.referenceMessageIDs,
             receivedAt: fetched.internalDate ?? parsed.date ?? Date(),
             senderName: parsed.senderName,
             senderEmail: parsed.senderEmail,
@@ -273,6 +307,24 @@ final class FastmailService {
             return .messageNotFound(messageID ?? id)
         default:
             return .connectionFailed(error.localizedDescription)
+        }
+    }
+
+    private static func userFacingSendError(for error: SMTPClientError) -> String {
+        switch error {
+        case .authenticationFailed:
+            return "Fastmail rejected authentication. Re-enter your Fastmail app password in Settings and try again."
+        case .sendFailed(let statusCode, _):
+            switch statusCode {
+            case 421, 450, 451, 452:
+                return "Fastmail is temporarily unavailable for sending. Please try again shortly."
+            case 550, 551, 552, 553, 554:
+                return "Fastmail rejected this recipient or message content. Review the reply and try again."
+            default:
+                return error.localizedDescription
+            }
+        default:
+            return error.localizedDescription
         }
     }
 
@@ -318,6 +370,9 @@ private struct FastmailParsedRFC822Message {
     let senderName: String
     let senderEmail: String
     let subject: String
+    let messageHeaderID: String?
+    let inReplyToMessageID: String?
+    let referenceMessageIDs: [String]
     let date: Date?
     let body: String
     let htmlBody: String?
@@ -341,6 +396,9 @@ private struct FastmailParsedRFC822Message {
         let sender = parseFromHeader(fromRaw)
         let subject = headers["subject"] ?? "(No Subject)"
         let date = parseDate(headers["date"])
+        let messageHeaderID = firstMessageID(from: headers["message-id"])
+        let inReplyToMessageID = firstMessageID(from: headers["in-reply-to"])
+        let referenceMessageIDs = extractMessageIDList(from: headers["references"])
 
         let extracted = RFC822BodyExtractor.extract(headers: headers, body: bodyPart)
 
@@ -348,6 +406,9 @@ private struct FastmailParsedRFC822Message {
             senderName: sender.name,
             senderEmail: sender.email,
             subject: subject.trimmingCharacters(in: .whitespacesAndNewlines),
+            messageHeaderID: messageHeaderID,
+            inReplyToMessageID: inReplyToMessageID,
+            referenceMessageIDs: referenceMessageIDs,
             date: date,
             body: extracted.text,
             htmlBody: extracted.html
@@ -393,6 +454,76 @@ private struct FastmailParsedRFC822Message {
         if let date = formatter.date(from: raw) { return date }
         formatter.dateFormat = "d MMM yyyy HH:mm:ss Z"
         return formatter.date(from: raw)
+    }
+
+    private static func firstMessageID(from rawHeaderValue: String?) -> String? {
+        extractMessageIDList(from: rawHeaderValue).first
+    }
+
+    private static func extractMessageIDList(from rawHeaderValue: String?) -> [String] {
+        guard let rawHeaderValue else { return [] }
+        let clean = sanitizeHeaderValue(rawHeaderValue)
+        guard !clean.isEmpty else { return [] }
+
+        var extracted: [String] = []
+        var current = ""
+        var isCapturing = false
+
+        for character in clean {
+            if character == "<" {
+                current = "<"
+                isCapturing = true
+                continue
+            }
+            if isCapturing {
+                current.append(character)
+                if character == ">" {
+                    extracted.append(current)
+                    current = ""
+                    isCapturing = false
+                }
+            }
+        }
+
+        if extracted.isEmpty {
+            extracted = clean.split(whereSeparator: \.isWhitespace).map(String.init)
+        }
+        return deduplicatedMessageIDs(extracted)
+    }
+
+    private static func deduplicatedMessageIDs(_ ids: [String]) -> [String] {
+        var unique: [String] = []
+        var seen: Set<String> = []
+        for raw in ids {
+            guard let normalized = normalizedMessageID(raw), seen.insert(normalized).inserted else {
+                continue
+            }
+            unique.append(normalized)
+        }
+        return unique
+    }
+
+    private static func normalizedMessageID(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let clean = sanitizeHeaderValue(rawValue)
+        guard !clean.isEmpty else { return nil }
+
+        if clean.hasPrefix("<"), clean.hasSuffix(">") {
+            return clean
+        }
+        if let start = clean.firstIndex(of: "<"), let end = clean[start...].firstIndex(of: ">"), start < end {
+            return String(clean[start...end])
+        }
+        let firstToken = clean.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? clean
+        guard !firstToken.isEmpty else { return nil }
+        return "<\(firstToken)>"
+    }
+
+    private static func sanitizeHeaderValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
 }
