@@ -6,22 +6,22 @@
 - [x] Task-002: Implement Gmail Provider Reply Send
 - [x] Task-003: Wire Composer Send Button to Provider-Aware Send Path
 - [x] Task-004: Provider Fallback Behavior for Non-Gmail Accounts
+- [x] Task-005: Validation, Regression Checks, and Docs
 
 ## Current Iteration
 
-- Iteration: 4
-- Working on: Task-004 (complete, awaiting next assignment)
-- Started: 2026-03-03T20:14:00Z
+- Iteration: 5
+- Working on: Task-005 (complete)
+- Started: 2026-03-03T20:21:00Z
 
 ## Last Completed
 
-- Task-004: Provider Fallback Behavior for Non-Gmail Accounts
+- Task-005: Validation, Regression Checks, and Docs
 - Verification: `xcodebuild -project InboxGlide.xcodeproj -scheme InboxGlide -configuration Debug -destination "platform=macOS" build` ✅
 - Key decisions:
-	- Yahoo/Fastmail reply-send fallback remains explicitly unsupported in this phase and does not attempt provider send.
-	- Unsupported provider attempts now show provider-specific in-app messaging and warning-level logs.
-	- Reply-send logging metadata now includes account email for parity with provider operation logs.
-	- Local message mutation (`isRead`) remains success-only after provider send succeeds.
+	- Regression diff scan (`git diff --unified=0 41c5630..HEAD -- '*.swift'`) found no archive/delete branch edits.
+	- Existing archive/delete provider-action behavior remains unchanged while reply-send additions are isolated.
+	- README updated to reflect in-app reply-send scope: Gmail supported, Yahoo/Fastmail pending.
 
 ## Blockers
 
@@ -29,4 +29,4 @@
 
 ## Notes for Next Iteration
 
-- Task-005: Run broader regression validation/docs update for reply-send status once provider fallback UX is finalized.
+- No active follow-up from this task.
