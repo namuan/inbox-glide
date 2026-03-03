@@ -4,22 +4,23 @@
 
 - [x] Task-001: Define Reply Send Contract in App Layer
 - [x] Task-002: Implement Gmail Provider Reply Send
+- [x] Task-003: Wire Composer Send Button to Provider-Aware Send Path
 
 ## Current Iteration
 
-- Iteration: 2
-- Working on: Task-002 (complete, awaiting next assignment)
-- Started: 2026-03-03T19:35:00Z
+- Iteration: 3
+- Working on: Task-003 (complete, awaiting next assignment)
+- Started: 2026-03-03T20:00:00Z
 
 ## Last Completed
 
-- Task-002: Implement Gmail Provider Reply Send
+- Task-003: Wire Composer Send Button to Provider-Aware Send Path
 - Verification: `xcodebuild -project InboxGlide.xcodeproj -scheme InboxGlide -configuration Debug -destination "platform=macOS" build` ✅
 - Key decisions:
-	- Added Gmail reply send via `users/me/messages/send` with RFC822 payload encoding and threading support (`threadId`, `In-Reply-To`, `References`) when metadata is available.
-	- Reused existing Gmail OAuth restore/refresh flow by adding `GmailAuthStore.sendReply(_:)`.
-	- Upgraded `MailStore.sendReply` to perform provider dispatch for Gmail and surface actionable user-facing errors; non-Gmail now returns explicit not-supported messaging for now.
-	- Preserved current composer success behavior (existing archive path) to keep Task-002 scope focused on provider send wiring.
+	- `ReplyComposerView` now has an in-flight send state (`isSending`) and disables duplicate sends while the async provider send is running.
+	- Composer success path now dismisses without archiving/removing the original message from deck flow.
+	- `MailStore.sendReply` now marks the source message `isRead = true` on successful provider send and persists via existing save/rebuild path.
+	- AI generation remains optional and unchanged for both `.reply` and `.aiReply` composer modes.
 
 ## Blockers
 
@@ -27,6 +28,5 @@
 
 ## Notes for Next Iteration
 
-- Task-003: Update composer success behavior to keep message in inbox and mark `isRead = true` after send (currently still archives on success).
-- Task-003: Add send-in-progress guard in composer to prevent duplicate sends.
 - Task-004: Replace current non-Gmail reply send placeholder behavior with explicit provider-specific UX/notice requirements.
+- Task-005: Run broader regression validation/docs update for reply-send status once provider fallback UX is finalized.

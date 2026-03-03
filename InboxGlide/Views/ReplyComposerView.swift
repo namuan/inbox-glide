@@ -10,6 +10,7 @@ struct ReplyComposerView: View {
     @State private var note: String = ""
     @State private var bodyText: String = ""
     @State private var isGenerating: Bool = false
+    @State private var isSending: Bool = false
 
     var message: EmailMessage? {
         mailStore.messages.first(where: { $0.id == presentation.messageID })
@@ -71,20 +72,18 @@ struct ReplyComposerView: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(bodyText, forType: .string)
                     }
-                    Button("Send") {
+                    Button {
                         Task {
-                            let didSend = await mailStore.sendReply(
-                                messageID: presentation.messageID,
-                                composerMode: presentation.mode,
-                                body: bodyText
-                            )
-
-                            if didSend {
-                                mailStore.perform(action: .archive, isSecondary: false, messageID: message.id)
-                                dismiss()
-                            }
+                            await sendReply()
                         }
+                    } label: {
+                        if isSending {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(isSending ? "Sending…" : "Send")
                     }
+                    .disabled(isSending)
                     .keyboardShortcut(.defaultAction)
                 }
             } else {
@@ -108,6 +107,23 @@ struct ReplyComposerView: View {
         await MainActor.run {
             bodyText = reply
             isGenerating = false
+        }
+    }
+
+    @MainActor
+    private func sendReply() async {
+        guard !isSending else { return }
+        isSending = true
+        defer { isSending = false }
+
+        let didSend = await mailStore.sendReply(
+            messageID: presentation.messageID,
+            composerMode: presentation.mode,
+            body: bodyText
+        )
+
+        if didSend {
+            dismiss()
         }
     }
 }

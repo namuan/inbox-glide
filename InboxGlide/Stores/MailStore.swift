@@ -285,6 +285,9 @@ final class MailStore: ObservableObject {
             )
             do {
                 try await sendReplyOnProvider(request)
+                await MainActor.run {
+                    markMessageReadAfterSend(messageID: messageID)
+                }
                 logger.info(
                     "Reply sent through provider.",
                     category: "MailStore",
@@ -329,6 +332,13 @@ final class MailStore: ObservableObject {
             )
             return false
         }
+    }
+
+    private func markMessageReadAfterSend(messageID: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        messages[index].isRead = true
+        scheduleSave()
+        rebuildDeck()
     }
 
     private func makeReplySendRequest(
