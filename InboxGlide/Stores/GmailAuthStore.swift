@@ -250,21 +250,34 @@ final class GmailAuthStore: ObservableObject {
         }
 
         logger.info("Refreshing expired Gmail access token.", category: "GmailAuth")
-        let refreshed = try await oauthService.refreshAccessToken(refreshToken: refreshToken)
-        token.accessToken = refreshed.accessToken
-        token.refreshToken = refreshed.refreshToken ?? refreshToken
-        token.expiresAt = Self.expiryDate(from: refreshed.expiresIn)
+        do {
+            let refreshed = try await oauthService.refreshAccessToken(refreshToken: refreshToken)
+            token.accessToken = refreshed.accessToken
+            token.refreshToken = refreshed.refreshToken ?? refreshToken
+            token.expiresAt = Self.expiryDate(from: refreshed.expiresIn)
 
-        tokensByEmail[key] = token
-        connectedEmail = emailAddress
-        try persistSessions()
-        logger.info(
-            "Gmail access token refreshed and persisted.",
-            category: "GmailAuth",
-            metadata: ["email": emailAddress]
-        )
+            tokensByEmail[key] = token
+            connectedEmail = emailAddress
+            try persistSessions()
+            logger.info(
+                "Gmail access token refreshed and persisted.",
+                category: "GmailAuth",
+                metadata: ["email": emailAddress]
+            )
 
-        return token.accessToken
+            return token.accessToken
+        } catch OAuthServiceError.tokenRevoked {
+            logger.info(
+                "Gmail token revoked; initiating re-authentication.",
+                category: "GmailAuth",
+                metadata: ["email": emailAddress]
+            )
+            let reauthed = await signIn(forceAccountSelection: true)
+            guard reauthed, let newToken = tokensByEmail[key] else {
+                throw OAuthServiceError.tokenRevoked
+            }
+            return newToken.accessToken
+        }
     }
 
     private func persistSessions() throws {

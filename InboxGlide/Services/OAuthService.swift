@@ -12,6 +12,7 @@ enum OAuthServiceError: LocalizedError {
     case stateMismatch
     case authorizationDenied(String)
     case tokenExchangeFailed(String)
+    case tokenRevoked
     case oauthTimeout
 
     var errorDescription: String? {
@@ -32,6 +33,8 @@ enum OAuthServiceError: LocalizedError {
             return message
         case .tokenExchangeFailed(let message):
             return message
+        case .tokenRevoked:
+            return "Your Gmail session has been revoked. Reconnect Gmail in Settings."
         case .oauthTimeout:
             return "Timed out waiting for OAuth callback. Please try again."
         }
@@ -265,6 +268,10 @@ actor OAuthService {
         }
 
         let decodedError = try? JSONDecoder().decode(OAuthTokenErrorResponse.self, from: data)
+        if decodedError?.error == "invalid_grant" {
+            logger.warning("Gmail refresh token has been revoked or expired.", category: "OAuth")
+            throw OAuthServiceError.tokenRevoked
+        }
         let message = decodedError?.errorDescription ?? decodedError?.error ?? "Failed to refresh Gmail access token (HTTP \(http.statusCode))."
         logger.error("Access token refresh failed.", category: "OAuth", metadata: ["status": "\(http.statusCode)", "error": message])
         throw OAuthServiceError.tokenExchangeFailed(message)
