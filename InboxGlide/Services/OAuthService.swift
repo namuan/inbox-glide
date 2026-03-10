@@ -68,6 +68,8 @@ private struct OAuthTokenErrorResponse: Decodable {
 }
 
 actor OAuthService {
+    private static let invalidGrantErrorCode = "invalid_grant"
+
     private let config: GmailOAuthConfig
     private let session: URLSession
     private let logger = AppLogger.shared
@@ -268,7 +270,7 @@ actor OAuthService {
         }
 
         let decodedError = try? JSONDecoder().decode(OAuthTokenErrorResponse.self, from: data)
-        if decodedError?.error == "invalid_grant" {
+        if decodedError?.error == Self.invalidGrantErrorCode {
             logger.warning("Gmail refresh token has been revoked or expired.", category: "OAuth")
             throw OAuthServiceError.tokenRevoked
         }

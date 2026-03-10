@@ -267,7 +267,7 @@ final class GmailAuthStore: ObservableObject {
 
             return token.accessToken
         } catch OAuthServiceError.tokenRevoked {
-            logger.info(
+            logger.warning(
                 "Gmail token revoked; initiating re-authentication.",
                 category: "GmailAuth",
                 metadata: ["email": emailAddress]
