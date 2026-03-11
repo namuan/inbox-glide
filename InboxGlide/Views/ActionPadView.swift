@@ -13,6 +13,27 @@ struct ActionPadView: View {
                 actionButton(direction: .down)
                 actionButton(direction: .up)
                 actionButton(direction: .right)
+
+                if let message = mailStore.currentMessage {
+                    let isPinned = message.pinnedAt != nil
+                    Button {
+                        mailStore.perform(action: .pin, isSecondary: false, messageID: message.id)
+                    } label: {
+                        VStack(spacing: 6) {
+                            shortcutBadge("⌘P")
+                            Image(systemName: isPinned ? "pin.slash" : "pin.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(isPinned ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.blue))
+                            Text(isPinned ? "Unpin" : "Pin")
+                                .font(.caption)
+                                .lineLimit(1)
+                        }
+                        .frame(width: 110)
+                    }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut("p", modifiers: [.command])
+                    .help(isPinned ? "Unpin this email" : "Pin this email")
+                }
             }
 
             HStack(spacing: 10) {

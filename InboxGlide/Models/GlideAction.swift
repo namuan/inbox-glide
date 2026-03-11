@@ -19,6 +19,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
     case skip
     case reply
     case aiReply
+    case pin
 
     var id: String { rawValue }
 
@@ -42,6 +43,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         case .skip: return "Skip"
         case .reply: return "Reply"
         case .aiReply: return "AI Reply"
+        case .pin: return "Pin"
         }
     }
 
@@ -63,6 +65,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         case .skip: return "arrow.uturn.right"
         case .reply: return "arrowshape.turn.up.left"
         case .aiReply: return "sparkles"
+        case .pin: return "pin.fill"
         }
     }
 
@@ -82,6 +85,10 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         default:
             return true
         }
+    }
+
+    var isLocalOnly: Bool {
+        self == .pin
     }
 
     static var supportedInUI: [GlideAction] {

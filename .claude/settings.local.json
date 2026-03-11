@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./install.command 2>&1)"
+    ]
+  }
+}

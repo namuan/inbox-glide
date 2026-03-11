@@ -7,6 +7,31 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $mailStore.selectedAccountID) {
             Section {
+                Button {
+                    mailStore.showingPinnedOnly.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("Pinned", systemImage: "pin.fill")
+                        Spacer()
+                        if mailStore.showingPinnedOnly {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.blue)
+                                .accessibilityLabel("Pinned filter active")
+                        }
+                        let count = mailStore.pinnedMessageIDs.count
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .help("Show only pinned messages")
+            }
+
+            Section {
                 Toggle("Unified Inbox", isOn: $preferences.unifiedInboxEnabled)
                 if preferences.unifiedInboxEnabled {
                     Button {

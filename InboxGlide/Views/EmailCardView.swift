@@ -178,6 +178,12 @@ struct EmailCardView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
+            if message.pinnedAt != nil {
+                Label("Pinned", systemImage: "pin.fill")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.blue)
+                    .accessibilityLabel("Pinned")
+            }
             if message.isStarred {
                 Label("Starred", systemImage: "star.fill")
                     .labelStyle(.iconOnly)

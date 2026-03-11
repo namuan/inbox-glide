@@ -74,6 +74,7 @@ final class MailStore: ObservableObject {
 
     @Published var selectedAccountID: UUID? = nil { didSet { rebuildDeck() } }
     @Published var selectedCategory: MessageCategory? = nil { didSet { rebuildDeck() } }
+    @Published var showingPinnedOnly: Bool = false { didSet { rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
     @Published private(set) var queuedActions: [QueuedMailAction] = []
@@ -147,6 +148,12 @@ final class MailStore: ObservableObject {
         return messages.first(where: { $0.id == id })
     }
 
+    var pinnedMessageIDs: Set<UUID> {
+        Set(messages.compactMap {
+            $0.pinnedAt != nil && $0.deletedAt == nil && $0.archivedAt == nil ? $0.id : nil
+        })
+    }
+
     var isSyncing: Bool {
         !syncingProviders.isEmpty
     }
@@ -205,6 +212,7 @@ final class MailStore: ObservableObject {
                       (msg.snoozedUntil ?? .distantPast) <= now,
                       !blockedSenders.contains(msg.senderEmail.lowercased())
                 else { return false }
+                if showingPinnedOnly && msg.pinnedAt == nil { return false }
                 if let category = selectedCategory, msg.category != category { return false }
                 if unified {
                     if let selected = selectedAccountID { return msg.accountID == selected }
@@ -213,7 +221,13 @@ final class MailStore: ObservableObject {
                 if let selected = selectedAccountID { return msg.accountID == selected }
                 return msg.accountID == firstAccountID
             }
-            .sorted(by: { $0.receivedAt > $1.receivedAt })
+            .sorted {
+                let lPinned = $0.pinnedAt != nil
+                let rPinned = $1.pinnedAt != nil
+                if lPinned != rPinned { return lPinned }
+                if lPinned { return ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
+                return $0.receivedAt > $1.receivedAt
+            }
 
         let visibleIDs = visible.map { $0.id }
         let visibleSet = Set(visibleIDs)
@@ -1199,7 +1213,7 @@ final class MailStore: ObservableObject {
         guard let idx = messages.firstIndex(where: { $0.id == messageID }) else { return }
         let sender = messages[idx].senderEmail.lowercased()
 
-        if networkMonitor.isOnline == false {
+        if networkMonitor.isOnline == false && !action.isLocalOnly {
             queuedActions.append(QueuedMailAction(id: UUID(), createdAt: Date(), accountID: messages[idx].accountID, messageID: messageID, action: action, isSecondary: isSecondary))
         }
 
@@ -1295,10 +1309,13 @@ final class MailStore: ObservableObject {
 
         case .aiReply:
             composer = ComposerPresentation(messageID: messageID, mode: .aiReply)
+
+        case .pin:
+            messages[idx].pinnedAt = messages[idx].pinnedAt == nil ? Date() : nil
         }
 
         scheduleSave()
-        if networkMonitor.isOnline {
+        if networkMonitor.isOnline && !action.isLocalOnly {
             syncIfPossible()
         }
         rebuildDeck()
