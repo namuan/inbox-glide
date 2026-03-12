@@ -54,6 +54,28 @@ struct SidebarView: View {
             }
 
             Section("Accounts") {
+                HStack {
+                    Button {
+                        Task {
+                            await mailStore.syncAllProviders()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath.circle")
+                            Text("Sync All")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(mailStore.isSyncing || mailStore.accounts.isEmpty)
+                    .help("Sync all connected accounts")
+                    Spacer()
+                    if mailStore.isSyncing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .help("Syncing: \(mailStore.syncingProvidersLabel)")
+                    }
+                }
+                .padding(.vertical, 4)
                 ForEach(mailStore.accounts) { account in
                     HStack(spacing: 8) {
                         Circle()

@@ -109,6 +109,29 @@ struct AccountsSettingsView: View {
                     Text("No accounts yet.")
                         .foregroundStyle(.secondary)
                 } else {
+                    HStack {
+                        Button {
+                            Task {
+                                await mailStore.syncAllProviders()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.2.circlepath.circle")
+                                Text("Sync All")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(mailStore.isSyncing)
+                        Spacer()
+                        if mailStore.isSyncing {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Syncing \(mailStore.syncingProvidersLabel)...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
                     ForEach(mailStore.accounts) { account in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(alignment: .center, spacing: 12) {

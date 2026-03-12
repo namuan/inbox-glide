@@ -514,6 +514,37 @@ final class MailStore: ObservableObject {
         }
     }
 
+    func syncAllProviders() async {
+        guard networkMonitor.isOnline else {
+            await MainActor.run {
+                errorAlert = ErrorAlert(title: "Offline", message: "Connect to the internet to sync all accounts.")
+            }
+            return
+        }
+
+        let gmailAccounts = accounts.filter { $0.provider == .gmail }
+        let yahooAccounts = accounts.filter { $0.provider == .yahoo }
+        let fastmailAccounts = accounts.filter { $0.provider == .fastmail }
+
+        await withTaskGroup(of: Void.self) { group in
+            for account in gmailAccounts {
+                group.addTask {
+                    await self.syncAccountNow(account)
+                }
+            }
+            for account in yahooAccounts {
+                group.addTask {
+                    await self.syncAccountNow(account)
+                }
+            }
+            for account in fastmailAccounts {
+                group.addTask {
+                    await self.syncAccountNow(account)
+                }
+            }
+        }
+    }
+
     func addAccount(provider: MailProvider, displayName: String, emailAddress: String) {
         let cleanedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines)
