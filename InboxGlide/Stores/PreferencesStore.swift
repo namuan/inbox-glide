@@ -49,7 +49,6 @@ enum EmailBodyDisplayMode: String, Codable, CaseIterable, Identifiable {
 enum AIMode: String, Codable, CaseIterable, Identifiable {
     case off
     case local
-    case cloud
 
     var id: String { rawValue }
 
@@ -57,7 +56,6 @@ enum AIMode: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .off: return "Off"
         case .local: return "Local (Offline)"
-        case .cloud: return "Cloud (Stub)"
         }
     }
 }
