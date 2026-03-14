@@ -72,15 +72,17 @@ actor OAuthService {
 
     private let config: GmailOAuthConfig
     private let session: URLSession
+    private let requestTimeout: TimeInterval
     private let logger = AppLogger.shared
 
     private var pendingCodeContinuation: CheckedContinuation<String, Error>?
     private var pendingState: String?
     private var pendingVerifier: String?
 
-    init(config: GmailOAuthConfig, session: URLSession = .shared) {
+    init(config: GmailOAuthConfig, session: URLSession = .shared, requestTimeout: TimeInterval = 30) {
         self.config = config
         self.session = session
+        self.requestTimeout = requestTimeout
         logger.info(
             "OAuthService initialized.",
             category: "OAuth",
@@ -242,6 +244,7 @@ actor OAuthService {
         logger.info("Refreshing OAuth access token.", category: "OAuth")
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = requestTimeout
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         var bodyItems = [
@@ -283,6 +286,7 @@ actor OAuthService {
         logger.debug("Posting OAuth token exchange request.", category: "OAuth")
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = requestTimeout
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         var bodyItems = [

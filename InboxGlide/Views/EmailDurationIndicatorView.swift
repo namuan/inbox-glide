@@ -69,7 +69,6 @@ struct EmailDurationIndicatorView: View {
 
 struct EmailDurationIndicatorView_Previews: PreviewProvider {
     static var previews: some View {
-        let now = Date()
         var counts: [EmailDurationBucket: Int] = [:]
         for bucket in EmailDurationBucket.allCases {
             counts[bucket] = 0

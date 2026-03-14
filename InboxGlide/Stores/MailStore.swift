@@ -197,6 +197,7 @@ final class MailStore: ObservableObject {
     private var syncProviderCounts: [MailProvider: Int] = [:]
     private let lowDeckSyncThreshold = 16
     private let proactiveSyncCooldown: TimeInterval = 45
+    private let syncTimeoutSeconds: TimeInterval = 120
     private var threadsByID: [String: EmailThread] = [:]
     private var threadIDByMessageID: [UUID: String] = [:]
     private var visibleThreadIDByLeadMessageID: [UUID: String] = [:]
@@ -584,6 +585,13 @@ final class MailStore: ObservableObject {
             return
         }
 
+        let syncStartedAt = Date()
+        logger.info(
+            "Sync requested for account.",
+            category: "MailStore",
+            metadata: ["provider": account.provider.rawValue, "email": account.emailAddress]
+        )
+
         switch account.provider {
         case .gmail:
             await markSyncStarted(provider: .gmail)
@@ -597,10 +605,17 @@ final class MailStore: ObservableObject {
                 }
             } else {
                 do {
-                    let items = try await gmailAuthStore.fetchRecentInboxMessages(
-                        for: account.emailAddress,
-                        maxResults: 30
-                    )
+                    let items = try await withSyncTimeout(
+                        seconds: syncTimeoutSeconds,
+                        provider: .gmail,
+                        email: account.emailAddress,
+                        context: "foreground"
+                    ) { [self] in
+                        try await gmailAuthStore.fetchRecentInboxMessages(
+                            for: account.emailAddress,
+                            maxResults: 30
+                        )
+                    }
                     upsertGmailMessages(for: account.emailAddress, items: items)
                 } catch {
                     await MainActor.run {
@@ -615,14 +630,21 @@ final class MailStore: ObservableObject {
 
         case .yahoo:
             do {
-                _ = try await syncYahooInboxProgressive(
-                    for: account.emailAddress,
-                    maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
-                    batchSize: min(
-                        max(4, preferences.connectSyncBatchSize),
-                        max(20, min(120, preferences.connectSyncMaxResults))
+                _ = try await withSyncTimeout(
+                    seconds: syncTimeoutSeconds,
+                    provider: .yahoo,
+                    email: account.emailAddress,
+                    context: "foreground"
+                ) { [self] in
+                    try await syncYahooInboxProgressive(
+                        for: account.emailAddress,
+                        maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                        batchSize: min(
+                            max(4, preferences.connectSyncBatchSize),
+                            max(20, min(120, preferences.connectSyncMaxResults))
+                        )
                     )
-                )
+                }
             } catch {
                 await MainActor.run {
                     errorAlert = ErrorAlert(
@@ -634,14 +656,21 @@ final class MailStore: ObservableObject {
 
         case .fastmail:
             do {
-                _ = try await syncFastmailInboxProgressive(
-                    for: account.emailAddress,
-                    maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
-                    batchSize: min(
-                        max(4, preferences.connectSyncBatchSize),
-                        max(20, min(120, preferences.connectSyncMaxResults))
+                _ = try await withSyncTimeout(
+                    seconds: syncTimeoutSeconds,
+                    provider: .fastmail,
+                    email: account.emailAddress,
+                    context: "foreground"
+                ) { [self] in
+                    try await syncFastmailInboxProgressive(
+                        for: account.emailAddress,
+                        maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
+                        batchSize: min(
+                            max(4, preferences.connectSyncBatchSize),
+                            max(20, min(120, preferences.connectSyncMaxResults))
+                        )
                     )
-                )
+                }
             } catch {
                 await MainActor.run {
                     errorAlert = ErrorAlert(
@@ -651,6 +680,17 @@ final class MailStore: ObservableObject {
                 }
             }
         }
+
+        let durationMs = Int(Date().timeIntervalSince(syncStartedAt) * 1000)
+        logger.info(
+            "Sync finished for account.",
+            category: "MailStore",
+            metadata: [
+                "provider": account.provider.rawValue,
+                "email": account.emailAddress,
+                "durationMs": "\(durationMs)"
+            ]
+        )
     }
 
     func syncAllProviders() async {
@@ -664,6 +704,17 @@ final class MailStore: ObservableObject {
         let gmailAccounts = accounts.filter { $0.provider == .gmail }
         let yahooAccounts = accounts.filter { $0.provider == .yahoo }
         let fastmailAccounts = accounts.filter { $0.provider == .fastmail }
+        let startedAt = Date()
+
+        logger.info(
+            "Sync all providers requested.",
+            category: "MailStore",
+            metadata: [
+                "gmailCount": "\(gmailAccounts.count)",
+                "yahooCount": "\(yahooAccounts.count)",
+                "fastmailCount": "\(fastmailAccounts.count)"
+            ]
+        )
 
         await withTaskGroup(of: Void.self) { group in
             for account in gmailAccounts {
@@ -682,6 +733,13 @@ final class MailStore: ObservableObject {
                 }
             }
         }
+
+        let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        logger.info(
+            "Sync all providers completed.",
+            category: "MailStore",
+            metadata: ["durationMs": "\(durationMs)"]
+        )
     }
 
     func addAccount(provider: MailProvider, displayName: String, emailAddress: String) {
@@ -1798,6 +1856,81 @@ final class MailStore: ObservableObject {
         }
     }
 
+    private struct SyncTimeoutError: LocalizedError {
+        let provider: MailProvider
+        let email: String?
+        let context: String
+        let seconds: TimeInterval
+
+        var errorDescription: String? {
+            let providerName = provider.displayName
+            let emailSuffix = email.map { " (\($0))" } ?? ""
+            return "\(providerName) sync timed out after \(Int(seconds))s\(emailSuffix)."
+        }
+    }
+
+    private func withSyncTimeout<T>(
+        seconds: TimeInterval,
+        provider: MailProvider,
+        email: String?,
+        context: String,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        let startedAt = Date()
+        logger.debug(
+            "Sync timeout guard started.",
+            category: "MailStore",
+            metadata: [
+                "provider": provider.rawValue,
+                "email": email ?? "unknown",
+                "context": context,
+                "timeoutSeconds": "\(Int(seconds))"
+            ]
+        )
+        do {
+            let result = try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask {
+                    try await operation()
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    throw SyncTimeoutError(provider: provider, email: email, context: context, seconds: seconds)
+                }
+                guard let result = try await group.next() else {
+                    throw SyncTimeoutError(provider: provider, email: email, context: context, seconds: seconds)
+                }
+                group.cancelAll()
+                return result
+            }
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.debug(
+                "Sync timeout guard completed.",
+                category: "MailStore",
+                metadata: [
+                    "provider": provider.rawValue,
+                    "email": email ?? "unknown",
+                    "context": context,
+                    "durationMs": "\(durationMs)"
+                ]
+            )
+            return result
+        } catch {
+            let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            logger.warning(
+                "Sync timeout guard failed.",
+                category: "MailStore",
+                metadata: [
+                    "provider": provider.rawValue,
+                    "email": email ?? "unknown",
+                    "context": context,
+                    "durationMs": "\(durationMs)",
+                    "error": error.localizedDescription
+                ]
+            )
+            throw error
+        }
+    }
+
     @MainActor
     private func runBackgroundProviderSync() async {
         if isBackgroundSyncInProgress { return }
@@ -1831,10 +1964,17 @@ final class MailStore: ObservableObject {
                     await markSyncFinished(provider: .gmail)
                     continue
                 }
-                let items = try await gmailAuthStore.fetchRecentInboxMessages(
-                    for: account.emailAddress,
-                    maxResults: max(10, min(200, preferences.backgroundGmailFetchCount))
-                )
+                let items = try await withSyncTimeout(
+                    seconds: syncTimeoutSeconds,
+                    provider: .gmail,
+                    email: account.emailAddress,
+                    context: "background"
+                ) { [self] in
+                    try await gmailAuthStore.fetchRecentInboxMessages(
+                        for: account.emailAddress,
+                        maxResults: max(10, min(200, preferences.backgroundGmailFetchCount))
+                    )
+                }
                 upsertGmailMessages(for: account.emailAddress, items: items)
                 logger.debug(
                     "Background Gmail sync completed.",
@@ -1860,10 +2000,17 @@ final class MailStore: ObservableObject {
 
         for account in yahooAccounts {
             do {
-                try await syncYahooInbox(
-                    for: account.emailAddress,
-                    maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
-                )
+                _ = try await withSyncTimeout(
+                    seconds: syncTimeoutSeconds,
+                    provider: .yahoo,
+                    email: account.emailAddress,
+                    context: "background"
+                ) { [self] in
+                    try await syncYahooInbox(
+                        for: account.emailAddress,
+                        maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                    )
+                }
                 logger.debug(
                     "Background Yahoo sync completed.",
                     category: "MailStore",
@@ -1887,10 +2034,17 @@ final class MailStore: ObservableObject {
 
         for account in fastmailAccounts {
             do {
-                try await syncFastmailInbox(
-                    for: account.emailAddress,
-                    maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
-                )
+                _ = try await withSyncTimeout(
+                    seconds: syncTimeoutSeconds,
+                    provider: .fastmail,
+                    email: account.emailAddress,
+                    context: "background"
+                ) { [self] in
+                    try await syncFastmailInbox(
+                        for: account.emailAddress,
+                        maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                    )
+                }
                 logger.debug(
                     "Background Fastmail sync completed.",
                     category: "MailStore",

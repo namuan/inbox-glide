@@ -71,10 +71,12 @@ struct GmailProfile: Decodable {
 
 final class GmailService {
     private let session: URLSession
+    private let requestTimeout: TimeInterval
     private let logger = AppLogger.shared
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared, requestTimeout: TimeInterval = 30) {
         self.session = session
+        self.requestTimeout = requestTimeout
     }
 
     func fetchProfile(accessToken: String) async throws -> GmailProfile {
@@ -84,6 +86,7 @@ final class GmailService {
         }
 
         var request = URLRequest(url: url)
+        request.timeoutInterval = requestTimeout
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await session.data(for: request)
@@ -125,6 +128,7 @@ final class GmailService {
         }
 
         var listRequest = URLRequest(url: listURL)
+        listRequest.timeoutInterval = requestTimeout
         listRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let (listData, listResponse) = try await session.data(for: listRequest)
@@ -177,6 +181,7 @@ final class GmailService {
         }
 
         var request = URLRequest(url: url)
+        request.timeoutInterval = requestTimeout
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
@@ -203,6 +208,7 @@ final class GmailService {
         }
 
         var request = URLRequest(url: url)
+        request.timeoutInterval = requestTimeout
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -237,6 +243,7 @@ final class GmailService {
         )
 
         var apiRequest = URLRequest(url: url)
+        apiRequest.timeoutInterval = requestTimeout
         apiRequest.httpMethod = "POST"
         apiRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         apiRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -281,6 +288,7 @@ final class GmailService {
         }
 
         var request = URLRequest(url: url)
+        request.timeoutInterval = requestTimeout
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await session.data(for: request)

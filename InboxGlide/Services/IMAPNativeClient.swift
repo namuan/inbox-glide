@@ -144,7 +144,9 @@ actor IMAPNativeClient: MailClient {
             connection.start(queue: .global(qos: .userInitiated))
         }
 
-        let greeting = try await readLine()
+        let greeting = try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
+            try await self.readLine()
+        }
         guard greeting.hasPrefix("* ") else {
             throw IMAPClientError.invalidResponse("Invalid IMAP greeting.")
         }
@@ -716,7 +718,9 @@ actor SMTPNativeClient {
             connection.start(queue: .global(qos: .userInitiated))
         }
 
-        let greeting = try await readResponse()
+        let greeting = try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
+            try await self.readResponse()
+        }
         guard greeting.statusCode == 220 else {
             throw SMTPClientError.invalidResponse("Unexpected SMTP greeting status: \(greeting.statusCode)")
         }
