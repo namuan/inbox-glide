@@ -76,7 +76,6 @@ final class FastmailService {
         let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
         do {
             try await client.connect()
-            defer { Task { await client.disconnect() } }
 
             let uids = try await client.fetchInboxUIDs(maxResults: maxResults, offset: offset)
             var items: [FastmailInboxMessage] = []
@@ -98,9 +97,14 @@ final class FastmailService {
                     "hasMore": "\(hasMore)"
                 ]
             )
+            await client.disconnect()
             return FastmailInboxPage(messages: items, hasMore: hasMore, nextOffset: nextOffset)
         } catch let error as IMAPClientError {
+            await client.disconnect()
             throw mapIMAPError(error, messageID: nil)
+        } catch {
+            await client.disconnect()
+            throw error
         }
     }
 
@@ -126,7 +130,6 @@ final class FastmailService {
         let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
         do {
             try await client.connect()
-            defer { Task { await client.disconnect() } }
             logger.debug("Fastmail IMAP client connected for progressive fetch.", category: "FastmailAPI", metadata: ["email": emailAddress])
 
             let target = max(1, min(maxResults, 200))
@@ -210,14 +213,19 @@ final class FastmailService {
                     "durationMs": "\(durationMs)"
                 ]
             )
+            await client.disconnect()
             return cumulative
         } catch let error as IMAPClientError {
+            await client.disconnect()
             logger.error(
                 "Fastmail progressive fetch failed.",
                 category: "FastmailAPI",
                 metadata: ["email": emailAddress, "error": error.localizedDescription]
             )
             throw mapIMAPError(error, messageID: nil)
+        } catch {
+            await client.disconnect()
+            throw error
         }
     }
 
@@ -226,15 +234,19 @@ final class FastmailService {
         let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
         do {
             try await client.connect()
-            defer { Task { await client.disconnect() } }
             try await client.trashMessage(uid: id)
+            await client.disconnect()
             logger.info(
                 "Moved Fastmail message to trash.",
                 category: "FastmailAPI",
                 metadata: ["email": emailAddress, "messageID": id]
             )
         } catch let error as IMAPClientError {
+            await client.disconnect()
             throw mapIMAPError(error, messageID: id)
+        } catch {
+            await client.disconnect()
+            throw error
         }
     }
 
@@ -243,18 +255,22 @@ final class FastmailService {
         let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
         do {
             try await client.connect()
-            defer { Task { await client.disconnect() } }
             try await client.archiveMessage(
                 uid: id,
                 mailboxCandidates: ["Archive", "Archives", "INBOX.Archive", "INBOX.Archives"]
             )
+            await client.disconnect()
             logger.info(
                 "Archived Fastmail message.",
                 category: "FastmailAPI",
                 metadata: ["email": emailAddress, "messageID": id]
             )
         } catch let error as IMAPClientError {
+            await client.disconnect()
             throw mapIMAPError(error, messageID: id)
+        } catch {
+            await client.disconnect()
+            throw error
         }
     }
 

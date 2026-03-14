@@ -47,6 +47,7 @@
 		C54A19CB88E10B6684ADCFB7 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5162C47F778687F50A114C17 /* AppearanceSettingsView.swift */; };
 		CD3761FF8B29DD29B9CA2AF5 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = AFF127296D88F7217FF82551 /* SwiftSoup */; };
 		CED50871B0C44A39422C692D /* FastmailCredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADE7DDE77E2B324B643A4AF /* FastmailCredentialsStore.swift */; };
+		D1A7B2E8F9C04D3E6A5B8F7C /* QuickAssistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B8C9D0F1A23456789ABC0D /* QuickAssistView.swift */; };
 		D134A8568F066EEC20A52158 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AB28E7B63992D3F357DED8 /* AppLogger.swift */; };
 		D238C556B13A031CC7CB52A0 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698A3E24B63937145B7550B /* NotificationScheduler.swift */; };
 		D3E91DBD750F3F1AB856F75F /* EmailDurationBucket.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B5F3362D7625879C0F0BD6 /* EmailDurationBucket.swift */; };
@@ -114,6 +115,7 @@
 		F1702C6AA8D6AE0BC7526687 /* GlideSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlideSettingsView.swift; sourceTree = "<group>"; };
 		FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailCardView.swift; sourceTree = "<group>"; };
 		FE1860A8F65B9134EB54FACE /* OAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthService.swift; sourceTree = "<group>"; };
+		E2B8C9D0F1A23456789ABC0D /* QuickAssistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAssistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +185,7 @@
 				26887FF1E407D2D7CDECF086 /* DeckView.swift */,
 				FD5F3C81BA6C7B9C59AA1AED /* EmailCardView.swift */,
 				2BC52F3D997CADB68B239639 /* EmailDurationIndicatorView.swift */,
+				E2B8C9D0F1A23456789ABC0D /* QuickAssistView.swift */,
 				CB8A63B45DC0E0158966A6B7 /* OnboardingView.swift */,
 				820A1CF05EA7CBFCA663E654 /* ProviderInstructionsView.swift */,
 				9FC14234670B98358BD37630 /* ReplyComposerView.swift */,
@@ -330,6 +333,7 @@
 				9B5C2277939B0F47E8B02820 /* EmailCardView.swift in Sources */,
 				D3E91DBD750F3F1AB856F75F /* EmailDurationBucket.swift in Sources */,
 				EFDC10874124D2571386E0ED /* EmailDurationIndicatorView.swift in Sources */,
+				D1A7B2E8F9C04D3E6A5B8F7C /* QuickAssistView.swift in Sources */,
 				83E9CBCF16F72349D2EFFA63 /* EmailMessage.swift in Sources */,
 				99BBE1F2E373895DFA4FBEEA /* EmailSummary.swift in Sources */,
 				8AE6CE9DDFC00E7A507C5441 /* EmailSummaryService.swift in Sources */,

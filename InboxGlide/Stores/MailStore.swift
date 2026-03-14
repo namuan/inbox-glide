@@ -60,6 +60,88 @@ struct ReminderPresentation: Identifiable {
     let messageID: UUID
 }
 
+struct EmailThread: Identifiable {
+    let id: String
+    let accountID: UUID
+    let messages: [EmailMessage]
+    let visibleMessages: [EmailMessage]
+
+    var leadMessage: EmailMessage {
+        visibleMessages.last ?? messages.last ?? messages[0]
+    }
+
+    var latestMessage: EmailMessage {
+        messages.last ?? visibleMessages.last ?? messages[0]
+    }
+
+    var messageIDs: [UUID] {
+        messages.map { $0.id }
+    }
+
+    var messageCount: Int {
+        messages.count
+    }
+
+    var unreadCount: Int {
+        visibleMessages.filter { !$0.isRead }.count
+    }
+
+    var hasPinnedMessages: Bool {
+        messages.contains { $0.pinnedAt != nil }
+    }
+
+    var latestPinnedAt: Date? {
+        messages.compactMap { $0.pinnedAt }.max()
+    }
+
+    var participants: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+
+        for message in messages.reversed() {
+            let trimmedName = message.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedEmail = message.senderEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = trimmedName.isEmpty || trimmedName.caseInsensitiveCompare(trimmedEmail) == .orderedSame
+                ? trimmedEmail
+                : "\(trimmedName) <\(trimmedEmail)>"
+            guard !label.isEmpty else { continue }
+            let key = trimmedEmail.lowercased().isEmpty ? label.lowercased() : trimmedEmail.lowercased()
+            guard seen.insert(key).inserted else { continue }
+            ordered.append(label)
+        }
+
+        return ordered
+    }
+}
+
+private struct ThreadSeed {
+    let id: String
+    let accountID: UUID
+    let messages: [EmailMessage]
+}
+
+private struct UnionFind {
+    private var parents: [Int]
+
+    init(count: Int) {
+        parents = Array(0 ..< count)
+    }
+
+    mutating func find(_ value: Int) -> Int {
+        if parents[value] != value {
+            parents[value] = find(parents[value])
+        }
+        return parents[value]
+    }
+
+    mutating func union(_ lhs: Int, _ rhs: Int) {
+        let leftRoot = find(lhs)
+        let rightRoot = find(rhs)
+        guard leftRoot != rightRoot else { return }
+        parents[rightRoot] = leftRoot
+    }
+}
+
 struct StoreSnapshot: Codable {
     var accounts: [MailAccount]
     var messages: [EmailMessage]
@@ -77,6 +159,7 @@ final class MailStore: ObservableObject {
     @Published var showingPinnedOnly: Bool = false { didSet { rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
+    @Published private(set) var visibleThreads: [EmailThread] = []
     @Published private(set) var queuedActions: [QueuedMailAction] = []
     @Published private(set) var blockedSenders: Set<String> = []
     @Published private(set) var unsubscribedSenders: Set<String> = []
@@ -107,13 +190,16 @@ final class MailStore: ObservableObject {
     private var isBackgroundSyncInProgress = false
     private var lastProactiveSyncAt: Date = .distantPast
     private var lastPeriodicSyncAt: Date = .distantPast
-    private var pendingAdvanceMessageID: UUID?
-    private var skippedMessageIDs: [UUID] = []
+    private var pendingAdvanceThreadID: String?
+    private var skippedThreadIDs: [String] = []
     private var yahooSyncInProgressEmails: Set<String> = []
     private var fastmailSyncInProgressEmails: Set<String> = []
     private var syncProviderCounts: [MailProvider: Int] = [:]
     private let lowDeckSyncThreshold = 16
     private let proactiveSyncCooldown: TimeInterval = 45
+    private var threadsByID: [String: EmailThread] = [:]
+    private var threadIDByMessageID: [UUID: String] = [:]
+    private var visibleThreadIDByLeadMessageID: [UUID: String] = [:]
 
     init(preferences: PreferencesStore, networkMonitor: NetworkMonitor, gmailAuthStore: GmailAuthStore) {
         self.preferences = preferences
@@ -144,8 +230,15 @@ final class MailStore: ObservableObject {
     }
 
     var currentMessage: EmailMessage? {
-        guard let id = deckMessageIDs.first else { return nil }
-        return messages.first(where: { $0.id == id })
+        currentThread?.leadMessage
+    }
+
+    var currentThread: EmailThread? {
+        guard let id = deckMessageIDs.first,
+              let threadID = visibleThreadIDByLeadMessageID[id] else {
+            return nil
+        }
+        return threadsByID[threadID]
     }
 
     var pinnedMessageIDs: Set<UUID> {
@@ -205,10 +298,24 @@ final class MailStore: ObservableObject {
         let unified = preferences.unifiedInboxEnabled
 
         let firstAccountID = accounts.first?.id
-        let visible = messages
-            .filter { msg in
-                guard msg.deletedAt == nil,
-                      msg.archivedAt == nil,
+        let seeds = buildThreadSeeds(
+            from: messages.filter { $0.deletedAt == nil }
+        )
+
+        var nextThreadsByID: [String: EmailThread] = [:]
+        var nextThreadIDByMessageID: [UUID: String] = [:]
+        var nextVisibleThreads: [EmailThread] = []
+
+        for seed in seeds {
+            let orderedMessages = seed.messages.sorted { lhs, rhs in
+                if lhs.receivedAt != rhs.receivedAt {
+                    return lhs.receivedAt < rhs.receivedAt
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+
+            let visibleMessages = orderedMessages.filter { msg in
+                guard msg.archivedAt == nil,
                       (msg.snoozedUntil ?? .distantPast) <= now,
                       !blockedSenders.contains(msg.senderEmail.lowercased())
                 else { return false }
@@ -221,28 +328,55 @@ final class MailStore: ObservableObject {
                 if let selected = selectedAccountID { return msg.accountID == selected }
                 return msg.accountID == firstAccountID
             }
-            .sorted {
-                let lPinned = $0.pinnedAt != nil
-                let rPinned = $1.pinnedAt != nil
-                if lPinned != rPinned { return lPinned }
-                if lPinned { return ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
-                return $0.receivedAt > $1.receivedAt
+
+            let thread = EmailThread(
+                id: seed.id,
+                accountID: seed.accountID,
+                messages: orderedMessages,
+                visibleMessages: visibleMessages
+            )
+            nextThreadsByID[thread.id] = thread
+            for message in orderedMessages {
+                nextThreadIDByMessageID[message.id] = thread.id
             }
+            if !visibleMessages.isEmpty {
+                nextVisibleThreads.append(thread)
+            }
+        }
 
-        let visibleIDs = visible.map { $0.id }
-        let visibleSet = Set(visibleIDs)
-        skippedMessageIDs = skippedMessageIDs.filter { visibleSet.contains($0) }
+        nextVisibleThreads.sort {
+            let lPinned = $0.latestPinnedAt != nil
+            let rPinned = $1.latestPinnedAt != nil
+            if lPinned != rPinned { return lPinned }
+            if lPinned { return ($0.latestPinnedAt ?? .distantPast) > ($1.latestPinnedAt ?? .distantPast) }
+            return $0.leadMessage.receivedAt > $1.leadMessage.receivedAt
+        }
 
-        let skippedSet = Set(skippedMessageIDs)
-        let unskipped = visibleIDs.filter { !skippedSet.contains($0) }
-        deckMessageIDs = unskipped + skippedMessageIDs
+        threadsByID = nextThreadsByID
+        threadIDByMessageID = nextThreadIDByMessageID
+        visibleThreads = nextVisibleThreads
 
-        if let pending = pendingAdvanceMessageID {
-            pendingAdvanceMessageID = nil
-            if let index = deckMessageIDs.firstIndex(of: pending), deckMessageIDs.count > 1 {
+        let visibleThreadIDs = Set(nextVisibleThreads.map(\.id))
+        skippedThreadIDs = skippedThreadIDs.filter { visibleThreadIDs.contains($0) }
+
+        let visibleThreadByID = Dictionary(uniqueKeysWithValues: nextVisibleThreads.map { ($0.id, $0) })
+        let skippedSet = Set(skippedThreadIDs)
+        let unskipped = nextVisibleThreads
+            .filter { !skippedSet.contains($0.id) }
+            .map { $0.leadMessage.id }
+        let skipped = skippedThreadIDs.compactMap { visibleThreadByID[$0]?.leadMessage.id }
+        deckMessageIDs = unskipped + skipped
+        visibleThreadIDByLeadMessageID = Dictionary(uniqueKeysWithValues: nextVisibleThreads.map { ($0.leadMessage.id, $0.id) })
+
+        if let pending = pendingAdvanceThreadID,
+           let pendingLeadMessageID = visibleThreadByID[pending]?.leadMessage.id {
+            pendingAdvanceThreadID = nil
+            if let index = deckMessageIDs.firstIndex(of: pendingLeadMessageID), deckMessageIDs.count > 1 {
                 let moved = deckMessageIDs.remove(at: index)
                 deckMessageIDs.append(moved)
             }
+        } else {
+            pendingAdvanceThreadID = nil
         }
 
         maybeTriggerLowDeckSync()
@@ -371,10 +505,17 @@ final class MailStore: ObservableObject {
     }
 
     private func markMessageReadAfterSend(messageID: UUID) {
-        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
-        messages[index].isRead = true
+        for relatedID in threadMessageIDs(containing: messageID) {
+            guard let index = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+            messages[index].isRead = true
+        }
         scheduleSave()
         rebuildDeck()
+    }
+
+    func thread(containing messageID: UUID) -> EmailThread? {
+        guard let threadID = threadIDByMessageID[messageID] else { return nil }
+        return threadsByID[threadID]
     }
 
     private func makeReplySendRequest(
@@ -446,8 +587,6 @@ final class MailStore: ObservableObject {
         switch account.provider {
         case .gmail:
             await markSyncStarted(provider: .gmail)
-            defer { Task { await self.markSyncFinished(provider: .gmail) } }
-
             let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
             if !hasSession {
                 await MainActor.run {
@@ -456,23 +595,23 @@ final class MailStore: ObservableObject {
                         message: "No Gmail session found for \(account.emailAddress). Reconnect Gmail in Settings."
                     )
                 }
-                return
-            }
-
-            do {
-                let items = try await gmailAuthStore.fetchRecentInboxMessages(
-                    for: account.emailAddress,
-                    maxResults: 30
-                )
-                upsertGmailMessages(for: account.emailAddress, items: items)
-            } catch {
-                await MainActor.run {
-                    errorAlert = ErrorAlert(
-                        title: "Gmail Sync Failed",
-                        message: error.localizedDescription
+            } else {
+                do {
+                    let items = try await gmailAuthStore.fetchRecentInboxMessages(
+                        for: account.emailAddress,
+                        maxResults: 30
                     )
+                    upsertGmailMessages(for: account.emailAddress, items: items)
+                } catch {
+                    await MainActor.run {
+                        errorAlert = ErrorAlert(
+                            title: "Gmail Sync Failed",
+                            message: error.localizedDescription
+                        )
+                    }
                 }
             }
+            await markSyncFinished(provider: .gmail)
 
         case .yahoo:
             do {
@@ -706,62 +845,67 @@ final class MailStore: ObservableObject {
         onBatch: ((Int, Int) -> Void)? = nil
     ) async throws -> Int {
         await markSyncStarted(provider: .yahoo)
-        defer { Task { await self.markSyncFinished(provider: .yahoo) } }
+        do {
+            let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if yahooSyncInProgressEmails.contains(normalizedEmail) {
+                logger.warning(
+                    "Skipping Yahoo sync because one is already in progress for this account.",
+                    category: "MailStore",
+                    metadata: ["email": emailAddress]
+                )
+                await markSyncFinished(provider: .yahoo)
+                return 0
+            }
+            yahooSyncInProgressEmails.insert(normalizedEmail)
+            defer { yahooSyncInProgressEmails.remove(normalizedEmail) }
 
-        let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if yahooSyncInProgressEmails.contains(normalizedEmail) {
-            logger.warning(
-                "Skipping Yahoo sync because one is already in progress for this account.",
+            logger.info(
+                "Starting Yahoo progressive sync.",
+                category: "MailStore",
+                metadata: [
+                    "email": emailAddress,
+                    "maxResults": "\(maxResults)",
+                    "batchSize": "\(batchSize)"
+                ]
+            )
+            let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: emailAddress)
+            logger.debug(
+                "Loaded Yahoo app password from keychain for sync.",
                 category: "MailStore",
                 metadata: ["email": emailAddress]
             )
-            return 0
-        }
-        yahooSyncInProgressEmails.insert(normalizedEmail)
-        defer { yahooSyncInProgressEmails.remove(normalizedEmail) }
-
-        logger.info(
-            "Starting Yahoo progressive sync.",
-            category: "MailStore",
-            metadata: [
-                "email": emailAddress,
-                "maxResults": "\(maxResults)",
-                "batchSize": "\(batchSize)"
-            ]
-        )
-        let appPassword = try yahooCredentialsStore.loadAppPassword(emailAddress: emailAddress)
-        logger.debug(
-            "Loaded Yahoo app password from keychain for sync.",
-            category: "MailStore",
-            metadata: ["email": emailAddress]
-        )
-        let total = try await yahooService.fetchRecentInboxMessagesProgressive(
-            emailAddress: emailAddress,
-            appPassword: appPassword,
-            maxResults: maxResults,
-            batchSize: batchSize
-        ) { [weak self] cumulative, batchCount, messages in
-            guard let self else { return }
-            Task { @MainActor in
-                self.logger.debug(
-                    "Applying Yahoo sync batch to local store.",
-                    category: "MailStore",
-                    metadata: [
-                        "email": emailAddress,
-                        "batchCount": "\(batchCount)",
-                        "cumulative": "\(cumulative)"
-                    ]
-                )
-                self.upsertYahooMessages(for: emailAddress, items: messages)
-                onBatch?(cumulative, batchCount)
+            let total = try await yahooService.fetchRecentInboxMessagesProgressive(
+                emailAddress: emailAddress,
+                appPassword: appPassword,
+                maxResults: maxResults,
+                batchSize: batchSize
+            ) { [weak self] cumulative, batchCount, messages in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.logger.debug(
+                        "Applying Yahoo sync batch to local store.",
+                        category: "MailStore",
+                        metadata: [
+                            "email": emailAddress,
+                            "batchCount": "\(batchCount)",
+                            "cumulative": "\(cumulative)"
+                        ]
+                    )
+                    self.upsertYahooMessages(for: emailAddress, items: messages)
+                    onBatch?(cumulative, batchCount)
+                }
             }
+            logger.info(
+                "Finished Yahoo progressive sync.",
+                category: "MailStore",
+                metadata: ["email": emailAddress, "totalFetched": "\(total)"]
+            )
+            await markSyncFinished(provider: .yahoo)
+            return total
+        } catch {
+            await markSyncFinished(provider: .yahoo)
+            throw error
         }
-        logger.info(
-            "Finished Yahoo progressive sync.",
-            category: "MailStore",
-            metadata: ["email": emailAddress, "totalFetched": "\(total)"]
-        )
-        return total
     }
 
     func upsertYahooMessages(for emailAddress: String, items: [YahooInboxMessage]) {
@@ -873,62 +1017,67 @@ final class MailStore: ObservableObject {
         onBatch: ((Int, Int) -> Void)? = nil
     ) async throws -> Int {
         await markSyncStarted(provider: .fastmail)
-        defer { Task { await self.markSyncFinished(provider: .fastmail) } }
+        do {
+            let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if fastmailSyncInProgressEmails.contains(normalizedEmail) {
+                logger.warning(
+                    "Skipping Fastmail sync because one is already in progress for this account.",
+                    category: "MailStore",
+                    metadata: ["email": emailAddress]
+                )
+                await markSyncFinished(provider: .fastmail)
+                return 0
+            }
+            fastmailSyncInProgressEmails.insert(normalizedEmail)
+            defer { fastmailSyncInProgressEmails.remove(normalizedEmail) }
 
-        let normalizedEmail = emailAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if fastmailSyncInProgressEmails.contains(normalizedEmail) {
-            logger.warning(
-                "Skipping Fastmail sync because one is already in progress for this account.",
+            logger.info(
+                "Starting Fastmail progressive sync.",
+                category: "MailStore",
+                metadata: [
+                    "email": emailAddress,
+                    "maxResults": "\(maxResults)",
+                    "batchSize": "\(batchSize)"
+                ]
+            )
+            let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: emailAddress)
+            logger.debug(
+                "Loaded Fastmail app password from keychain for sync.",
                 category: "MailStore",
                 metadata: ["email": emailAddress]
             )
-            return 0
-        }
-        fastmailSyncInProgressEmails.insert(normalizedEmail)
-        defer { fastmailSyncInProgressEmails.remove(normalizedEmail) }
-
-        logger.info(
-            "Starting Fastmail progressive sync.",
-            category: "MailStore",
-            metadata: [
-                "email": emailAddress,
-                "maxResults": "\(maxResults)",
-                "batchSize": "\(batchSize)"
-            ]
-        )
-        let appPassword = try fastmailCredentialsStore.loadAppPassword(emailAddress: emailAddress)
-        logger.debug(
-            "Loaded Fastmail app password from keychain for sync.",
-            category: "MailStore",
-            metadata: ["email": emailAddress]
-        )
-        let total = try await fastmailService.fetchRecentInboxMessagesProgressive(
-            emailAddress: emailAddress,
-            appPassword: appPassword,
-            maxResults: maxResults,
-            batchSize: batchSize
-        ) { [weak self] cumulative, batchCount, messages in
-            guard let self else { return }
-            Task { @MainActor in
-                self.logger.debug(
-                    "Applying Fastmail sync batch to local store.",
-                    category: "MailStore",
-                    metadata: [
-                        "email": emailAddress,
-                        "batchCount": "\(batchCount)",
-                        "cumulative": "\(cumulative)"
-                    ]
-                )
-                self.upsertFastmailMessages(for: emailAddress, items: messages)
-                onBatch?(cumulative, batchCount)
+            let total = try await fastmailService.fetchRecentInboxMessagesProgressive(
+                emailAddress: emailAddress,
+                appPassword: appPassword,
+                maxResults: maxResults,
+                batchSize: batchSize
+            ) { [weak self] cumulative, batchCount, messages in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.logger.debug(
+                        "Applying Fastmail sync batch to local store.",
+                        category: "MailStore",
+                        metadata: [
+                            "email": emailAddress,
+                            "batchCount": "\(batchCount)",
+                            "cumulative": "\(cumulative)"
+                        ]
+                    )
+                    self.upsertFastmailMessages(for: emailAddress, items: messages)
+                    onBatch?(cumulative, batchCount)
+                }
             }
+            logger.info(
+                "Finished Fastmail progressive sync.",
+                category: "MailStore",
+                metadata: ["email": emailAddress, "totalFetched": "\(total)"]
+            )
+            await markSyncFinished(provider: .fastmail)
+            return total
+        } catch {
+            await markSyncFinished(provider: .fastmail)
+            throw error
         }
-        logger.info(
-            "Finished Fastmail progressive sync.",
-            category: "MailStore",
-            metadata: ["email": emailAddress, "totalFetched": "\(total)"]
-        )
-        return total
     }
 
     func upsertFastmailMessages(for emailAddress: String, items: [FastmailInboxMessage]) {
@@ -1022,11 +1171,14 @@ final class MailStore: ObservableObject {
     func applyMoveToFolder(_ folder: String, messageID: UUID) {
         let value = folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
-        guard let idx = messages.firstIndex(where: { $0.id == messageID }) else { return }
 
         let tag = "Folder: \(value)"
-        messages[idx].labels = Array(Set(messages[idx].labels + [tag])).sorted()
-        messages[idx].archivedAt = Date()
+        let relatedIDs = threadMessageIDs(containing: messageID)
+        for relatedID in relatedIDs {
+            guard let idx = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+            messages[idx].labels = Array(Set(messages[idx].labels + [tag])).sorted()
+            messages[idx].archivedAt = Date()
+        }
         scheduleSave()
         rebuildDeck()
     }
@@ -1034,9 +1186,12 @@ final class MailStore: ObservableObject {
     func applyLabel(_ label: String, messageID: UUID) {
         let value = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
-        guard let idx = messages.firstIndex(where: { $0.id == messageID }) else { return }
 
-        messages[idx].labels = Array(Set(messages[idx].labels + [value])).sorted()
+        let relatedIDs = threadMessageIDs(containing: messageID)
+        for relatedID in relatedIDs {
+            guard let idx = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+            messages[idx].labels = Array(Set(messages[idx].labels + [value])).sorted()
+        }
         scheduleSave()
         rebuildDeck()
     }
@@ -1044,12 +1199,18 @@ final class MailStore: ObservableObject {
     func deleteAllData() {
         accounts = []
         messages = []
+        visibleThreads = []
         blockedSenders = []
         unsubscribedSenders = []
         queuedActions = []
         selectedAccountID = nil
         selectedCategory = nil
         deckMessageIDs = []
+        threadsByID = [:]
+        threadIDByMessageID = [:]
+        visibleThreadIDByLeadMessageID = [:]
+        skippedThreadIDs = []
+        pendingAdvanceThreadID = nil
         deleteStoreFile()
     }
 
@@ -1168,6 +1329,164 @@ final class MailStore: ObservableObject {
         return deduplicated
     }
 
+    private func threadMessageIDs(containing messageID: UUID) -> [UUID] {
+        guard let threadID = threadIDByMessageID[messageID],
+              let thread = threadsByID[threadID] else {
+            return [messageID]
+        }
+        return thread.messageIDs
+    }
+
+    private func leadMessageID(forThreadContaining messageID: UUID) -> UUID {
+        guard let threadID = threadIDByMessageID[messageID],
+              let thread = threadsByID[threadID] else {
+            return messageID
+        }
+        return thread.leadMessage.id
+    }
+
+    func leadMessageID(containing messageID: UUID) -> UUID {
+        leadMessageID(forThreadContaining: messageID)
+    }
+
+    private func threadID(containing messageID: UUID) -> String? {
+        threadIDByMessageID[messageID]
+    }
+
+    private func buildThreadSeeds(from messages: [EmailMessage]) -> [ThreadSeed] {
+        let messagesByAccount = Dictionary(grouping: messages, by: \.accountID)
+        var seeds: [ThreadSeed] = []
+
+        for (accountID, accountMessages) in messagesByAccount {
+            let sorted = accountMessages.sorted { lhs, rhs in
+                if lhs.receivedAt != rhs.receivedAt {
+                    return lhs.receivedAt < rhs.receivedAt
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            guard !sorted.isEmpty else { continue }
+
+            var unions = UnionFind(count: sorted.count)
+            var indicesByProviderThreadID: [String: Int] = [:]
+            var indicesByHeaderID: [String: Int] = [:]
+
+            for (index, message) in sorted.enumerated() {
+                if let providerThreadID = normalizedThreadIdentifier(message.providerThreadID) {
+                    if let existingIndex = indicesByProviderThreadID[providerThreadID] {
+                        unions.union(existingIndex, index)
+                    } else {
+                        indicesByProviderThreadID[providerThreadID] = index
+                    }
+                }
+
+                if let headerID = normalizedMessageIdentifier(message.providerMessageHeaderID) {
+                    if let existingIndex = indicesByHeaderID[headerID] {
+                        unions.union(existingIndex, index)
+                    } else {
+                        indicesByHeaderID[headerID] = index
+                    }
+                }
+            }
+
+            for (index, message) in sorted.enumerated() {
+                let relatedHeaderIDs = Self.combineReferenceMessageIDs(
+                    message.providerReferenceMessageIDs ?? [],
+                    include: message.providerInReplyToMessageID
+                )
+                for reference in relatedHeaderIDs {
+                    guard let referenceID = normalizedMessageIdentifier(reference),
+                          let targetIndex = indicesByHeaderID[referenceID] else {
+                        continue
+                    }
+                    unions.union(index, targetIndex)
+                }
+            }
+
+            let subjectGroups = Dictionary(grouping: Array(sorted.enumerated())) { entry in
+                normalizedThreadSubject(entry.element.subject)
+            }
+
+            for (subjectKey, entries) in subjectGroups where subjectKey != "(no-subject)" && entries.count > 1 {
+                let orderedEntries = entries.sorted { lhs, rhs in
+                    if lhs.element.receivedAt != rhs.element.receivedAt {
+                        return lhs.element.receivedAt < rhs.element.receivedAt
+                    }
+                    return lhs.element.id.uuidString < rhs.element.id.uuidString
+                }
+
+                var anchorIndex = orderedEntries[0].offset
+                var anchorDate = orderedEntries[0].element.receivedAt
+                for entry in orderedEntries.dropFirst() {
+                    let delta = entry.element.receivedAt.timeIntervalSince(anchorDate)
+                    if delta <= 60 * 60 * 24 * 5 {
+                        unions.union(anchorIndex, entry.offset)
+                    } else {
+                        anchorIndex = entry.offset
+                        anchorDate = entry.element.receivedAt
+                    }
+                }
+            }
+
+            var grouped: [Int: [EmailMessage]] = [:]
+            for (index, message) in sorted.enumerated() {
+                let root = unions.find(index)
+                grouped[root, default: []].append(message)
+            }
+
+            for group in grouped.values {
+                let orderedGroup = group.sorted { lhs, rhs in
+                    if lhs.receivedAt != rhs.receivedAt {
+                        return lhs.receivedAt < rhs.receivedAt
+                    }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                guard let first = orderedGroup.first else { continue }
+                let last = orderedGroup.last ?? first
+                let provider = accounts.first(where: { $0.id == accountID })?.provider
+                let providerThreadID = orderedGroup.compactMap { normalizedThreadIdentifier($0.providerThreadID) }.first
+                let headerID = orderedGroup.compactMap { normalizedMessageIdentifier($0.providerMessageHeaderID) }.first
+                let fallbackKey = normalizedThreadSubject(last.subject)
+                let threadID = providerThreadID
+                    ?? headerID
+                    ?? "subject:\(fallbackKey):\(Int(first.receivedAt.timeIntervalSince1970 / (60 * 60 * 24 * 5)))"
+                let providerPrefix = provider?.rawValue ?? "local"
+                seeds.append(ThreadSeed(id: "\(providerPrefix):\(accountID.uuidString):\(threadID)", accountID: accountID, messages: orderedGroup))
+            }
+        }
+
+        return seeds.sorted { lhs, rhs in
+            let lhsDate = lhs.messages.last?.receivedAt ?? .distantPast
+            let rhsDate = rhs.messages.last?.receivedAt ?? .distantPast
+            return lhsDate > rhsDate
+        }
+    }
+
+    private func normalizedThreadIdentifier(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed.lowercased()
+    }
+
+    private func normalizedMessageIdentifier(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        let lowercased = trimmed.lowercased()
+        return lowercased.hasPrefix("<") && lowercased.hasSuffix(">") ? lowercased : "<\(lowercased)>"
+    }
+
+    private func normalizedThreadSubject(_ subject: String) -> String {
+        var normalized = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty { return "(no-subject)" }
+
+        let pattern = "^(?:(?:re|fw|fwd)\\s*:\\s*)+"
+        while let range = normalized.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+            normalized.removeSubrange(range)
+            normalized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if normalized.isEmpty { return "(no-subject)" }
+        return normalized.lowercased()
+    }
+
     private static func replySendErrorMessage(for error: Error, provider: MailProvider) -> String {
         if let providerError = error as? ReplyProviderSendError {
             return providerError.localizedDescription
@@ -1243,6 +1562,10 @@ final class MailStore: ObservableObject {
     private func apply(action: GlideAction, isSecondary: Bool, messageID: UUID) {
         guard let idx = messages.firstIndex(where: { $0.id == messageID }) else { return }
         let sender = messages[idx].senderEmail.lowercased()
+        let relatedIDs = threadMessageIDs(containing: messageID)
+        let relatedMessages = relatedIDs.compactMap { id in
+            messages.first(where: { $0.id == id })
+        }
 
         if networkMonitor.isOnline == false && !action.isLocalOnly {
             queuedActions.append(QueuedMailAction(id: UUID(), createdAt: Date(), accountID: messages[idx].accountID, messageID: messageID, action: action, isSecondary: isSecondary))
@@ -1250,30 +1573,52 @@ final class MailStore: ObservableObject {
 
         switch action {
         case .delete:
-            let message = messages[idx]
-            messages[idx].deletedAt = Date()
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            markMessagesRead(ids: relatedIDs)
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].deletedAt = Date()
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
-            trashOnProviderIfPossible(message)
+            for message in relatedMessages {
+                trashOnProviderIfPossible(message)
+            }
 
         case .archive:
-            let message = messages[idx]
-            messages[idx].archivedAt = Date()
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            markMessagesRead(ids: relatedIDs)
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].archivedAt = Date()
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
-            archiveOnProviderIfPossible(message)
+            for message in relatedMessages {
+                archiveOnProviderIfPossible(message)
+            }
 
         case .markUnread:
-            messages[idx].isRead = false
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].isRead = false
+            }
 
         case .unstar:
-            messages[idx].isStarred = false
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].isStarred = false
+            }
 
         case .markImportant:
-            messages[idx].isImportant = true
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].isImportant = true
+            }
 
         case .unmarkImportant:
-            messages[idx].isImportant = false
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].isImportant = false
+            }
 
         case .moveToFolder:
             prompt = .moveToFolder(messageID: messageID)
@@ -1285,12 +1630,17 @@ final class MailStore: ObservableObject {
 
         case .unsubscribe:
             unsubscribedSenders.insert(sender)
-            messages[idx].archivedAt = Date()
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            markMessagesRead(ids: relatedIDs)
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].archivedAt = Date()
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
 
         case .unsubscribeAndDeleteAllFromSender:
             unsubscribedSenders.insert(sender)
+            markMessagesRead(where: { $0.senderEmail.lowercased() == sender })
             for i in messages.indices {
                 if messages[i].senderEmail.lowercased() == sender {
                     messages[i].deletedAt = Date()
@@ -1302,6 +1652,7 @@ final class MailStore: ObservableObject {
 
         case .blockSender:
             blockedSenders.insert(sender)
+            markMessagesRead(where: { $0.senderEmail.lowercased() == sender })
             for i in messages.indices {
                 if messages[i].senderEmail.lowercased() == sender {
                     messages[i].archivedAt = Date()
@@ -1312,22 +1663,31 @@ final class MailStore: ObservableObject {
             })
 
         case .snooze1h:
-            messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60)
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].snoozedUntil = Date().addingTimeInterval(60 * 60)
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
 
         case .snooze4h:
-            messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60 * 4)
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].snoozedUntil = Date().addingTimeInterval(60 * 60 * 4)
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
 
         case .snooze1d:
-            messages[idx].snoozedUntil = Date().addingTimeInterval(60 * 60 * 24)
-            deckMessageIDs.removeAll(where: { $0 == messageID })
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].snoozedUntil = Date().addingTimeInterval(60 * 60 * 24)
+            }
+            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
 
         case .createReminder:
-            reminder = ReminderPresentation(messageID: messageID)
+            reminder = ReminderPresentation(messageID: leadMessageID(forThreadContaining: messageID))
             scheduleSave()
             return
 
@@ -1336,13 +1696,17 @@ final class MailStore: ObservableObject {
             advanceToNextMessage(after: messageID)
 
         case .reply:
-            composer = ComposerPresentation(messageID: messageID, mode: .reply)
+            composer = ComposerPresentation(messageID: leadMessageID(forThreadContaining: messageID), mode: .reply)
 
         case .aiReply:
-            composer = ComposerPresentation(messageID: messageID, mode: .aiReply)
+            composer = ComposerPresentation(messageID: leadMessageID(forThreadContaining: messageID), mode: .aiReply)
 
         case .pin:
-            messages[idx].pinnedAt = messages[idx].pinnedAt == nil ? Date() : nil
+            let shouldPin = relatedMessages.allSatisfy { $0.pinnedAt == nil }
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].pinnedAt = shouldPin ? Date() : nil
+            }
         }
 
         scheduleSave()
@@ -1352,21 +1716,38 @@ final class MailStore: ObservableObject {
         rebuildDeck()
     }
 
+    private func markMessagesRead(ids: [UUID]) {
+        for messageID in ids {
+            guard let index = messages.firstIndex(where: { $0.id == messageID }) else { continue }
+            messages[index].isRead = true
+        }
+    }
+
+    private func markMessagesRead(where predicate: (EmailMessage) -> Bool) {
+        for index in messages.indices where predicate(messages[index]) {
+            messages[index].isRead = true
+        }
+    }
+
     private func advanceToNextMessage(after messageID: UUID) {
-        pendingAdvanceMessageID = messageID
-        if let first = deckMessageIDs.first, first == messageID {
+        guard let threadID = threadID(containing: messageID) else { return }
+        pendingAdvanceThreadID = threadID
+        let leadMessageID = leadMessageID(forThreadContaining: messageID)
+        if let first = deckMessageIDs.first, first == leadMessageID {
             deckMessageIDs.removeFirst()
             deckMessageIDs.append(first)
         }
     }
 
     private func markSkipped(_ messageID: UUID) {
-        skippedMessageIDs.removeAll(where: { $0 == messageID })
-        skippedMessageIDs.append(messageID)
+        guard let threadID = threadID(containing: messageID) else { return }
+        skippedThreadIDs.removeAll(where: { $0 == threadID })
+        skippedThreadIDs.append(threadID)
     }
 
     private func clearSkippedState(for messageID: UUID) {
-        skippedMessageIDs.removeAll(where: { $0 == messageID })
+        guard let threadID = threadID(containing: messageID) else { return }
+        skippedThreadIDs.removeAll(where: { $0 == threadID })
     }
 
     private func triggerBackgroundProviderSync() {
@@ -1439,7 +1820,6 @@ final class MailStore: ObservableObject {
 
         for account in gmailAccounts {
             await markSyncStarted(provider: .gmail)
-            defer { Task { await self.markSyncFinished(provider: .gmail) } }
             do {
                 let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
                 if !hasSession {
@@ -1448,6 +1828,7 @@ final class MailStore: ObservableObject {
                         category: "MailStore",
                         metadata: ["email": account.emailAddress]
                     )
+                    await markSyncFinished(provider: .gmail)
                     continue
                 }
                 let items = try await gmailAuthStore.fetchRecentInboxMessages(
@@ -1467,6 +1848,7 @@ final class MailStore: ObservableObject {
                     metadata: ["email": account.emailAddress, "error": error.localizedDescription]
                 )
             }
+            await markSyncFinished(provider: .gmail)
         }
     }
 

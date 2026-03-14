@@ -71,6 +71,46 @@ actor IMAPNativeClient: MailClient {
         self.credentials = credentials
     }
 
+    private final class ContinuationBox<T>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<T, Error>?
+
+        init(_ continuation: CheckedContinuation<T, Error>) {
+            self.continuation = continuation
+        }
+
+        func resume(returning value: T) {
+            take()?.resume(returning: value)
+        }
+
+        func resume(throwing error: Error) {
+            take()?.resume(throwing: error)
+        }
+
+        private func take() -> CheckedContinuation<T, Error>? {
+            lock.lock()
+            defer { lock.unlock() }
+            let continuation = continuation
+            self.continuation = nil
+            return continuation
+        }
+    }
+
+    private func withConnectionContinuation<T>(
+        for connection: NWConnection,
+        operation: @escaping @Sendable (ContinuationBox<T>) -> Void
+    ) async throws -> T {
+        try Task.checkCancellation()
+        let result: T = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+                operation(ContinuationBox(continuation))
+            }
+        } onCancel: {
+            connection.cancel()
+        }
+        return result
+    }
+
     func connect() async throws {
         if isConnected { return }
         let connectStartedAt = Date()
@@ -85,12 +125,12 @@ actor IMAPNativeClient: MailClient {
         let connection = NWConnection(host: NWEndpoint.Host(config.hostname), port: port, using: params)
         self.connection = connection
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
             connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
                     connection.stateUpdateHandler = nil
-                    continuation.resume()
+                    continuation.resume(returning: ())
                 case .failed(let error):
                     connection.stateUpdateHandler = nil
                     continuation.resume(throwing: error)
@@ -132,7 +172,9 @@ actor IMAPNativeClient: MailClient {
 
     func disconnect() async {
         if let connection {
-            _ = try? await sendCommand("LOGOUT")
+            if !Task.isCancelled {
+                _ = try? await sendCommand("LOGOUT")
+            }
             connection.cancel()
         }
         connection = nil
@@ -337,13 +379,13 @@ actor IMAPNativeClient: MailClient {
 
     private func sendRaw(_ string: String, over connection: NWConnection) async throws {
         let data = Data(string.utf8)
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
             connection.send(content: data, completion: .contentProcessed { error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
-                continuation.resume()
+                continuation.resume(returning: ())
             })
         }
     }
@@ -409,7 +451,7 @@ actor IMAPNativeClient: MailClient {
         guard let connection else {
             throw IMAPClientError.disconnected
         }
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+        return try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Data>) in
             connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
                 if let error {
                     continuation.resume(throwing: error)

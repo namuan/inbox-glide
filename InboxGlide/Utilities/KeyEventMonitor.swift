@@ -2,20 +2,34 @@ import AppKit
 import Foundation
 
 final class KeyEventMonitor: ObservableObject {
-    private var monitor: Any?
+    private var keyDownMonitor: Any?
+    private var keyUpMonitor: Any?
 
-    func start(handler: @escaping (NSEvent) -> Bool) {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
-            if handler(event) { return nil }
+    func start(
+        keyDownHandler: @escaping (NSEvent) -> Bool,
+        keyUpHandler: @escaping (NSEvent) -> Bool
+    ) {
+        stop()
+
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            if keyDownHandler(event) { return nil }
+            return event
+        }
+
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyUp]) { event in
+            if keyUpHandler(event) { return nil }
             return event
         }
     }
 
     func stop() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
         }
-        monitor = nil
+        if let keyUpMonitor {
+            NSEvent.removeMonitor(keyUpMonitor)
+        }
+        keyDownMonitor = nil
+        keyUpMonitor = nil
     }
 }

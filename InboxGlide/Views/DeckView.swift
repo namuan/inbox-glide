@@ -10,11 +10,12 @@ struct DeckView: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging: Bool = false
+    @State private var isSpaceHeld: Bool = false
 
     var body: some View {
         ZStack {
-            if let message = mailStore.currentMessage {
-                cardStack(message: message)
+            if let thread = mailStore.currentThread {
+                cardStack(thread: thread)
                     .padding(24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -23,9 +24,10 @@ struct DeckView: View {
         }
         .onAppear {
             mailStore.rebuildDeck()
-            keyEvents.start { event in
-                handleKey(event)
-            }
+            keyEvents.start(
+                keyDownHandler: { event in handleKeyDown(event) },
+                keyUpHandler: { event in handleKeyUp(event) }
+            )
         }
         .onDisappear {
             keyEvents.stop()
@@ -55,7 +57,7 @@ struct DeckView: View {
         }
     }
 
-    private func cardStack(message: EmailMessage) -> some View {
+    private func cardStack(thread: EmailThread) -> some View {
         let actionOverlay = overlayAction
 
         return ZStack {
@@ -73,7 +75,7 @@ struct DeckView: View {
                     .accessibilityHidden(true)
             }
 
-            EmailCardView(message: message)
+            EmailCardView(thread: thread)
                 .padding(10)
                 .offset(dragOffset)
                 .rotationEffect(.degrees(Double(dragOffset.width) / 40.0))
@@ -120,6 +122,16 @@ struct DeckView: View {
                 Spacer()
                 ActionPadView()
                     .padding(.bottom, 18)
+            }
+
+            if isSpaceHeld, preferences.aiMode != .off, let message = mailStore.currentMessage {
+                VStack {
+                    QuickAssistView(message: message)
+                    Spacer()
+                }
+                .padding(24)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .animation(.easeOut(duration: 0.15), value: isSpaceHeld)
             }
         }
     }
@@ -207,7 +219,7 @@ struct DeckView: View {
         }
     }
 
-    private func handleKey(_ event: NSEvent) -> Bool {
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
         // Avoid hijacking arrow keys while typing.
         if let responder = NSApp.keyWindow?.firstResponder {
             if responder is NSTextView { return false }
@@ -216,16 +228,34 @@ struct DeckView: View {
         let useSecondary = event.modifierFlags.contains(.option)
         switch event.keyCode {
         case 123: // left
+            guard !isSpaceHeld else { return false }
             mailStore.performGlide(.left, useSecondary: useSecondary)
             return true
         case 124: // right
+            guard !isSpaceHeld else { return false }
             mailStore.performGlide(.right, useSecondary: useSecondary)
             return true
         case 126: // up
+            guard !isSpaceHeld else { return false }
             mailStore.performGlide(.up, useSecondary: useSecondary)
             return true
         case 125: // down
+            guard !isSpaceHeld else { return false }
             mailStore.performGlide(.down, useSecondary: useSecondary)
+            return true
+        case 49: // space
+            guard preferences.aiMode != .off else { return false }
+            isSpaceHeld = true
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleKeyUp(_ event: NSEvent) -> Bool {
+        switch event.keyCode {
+        case 49: // space
+            isSpaceHeld = false
             return true
         default:
             return false

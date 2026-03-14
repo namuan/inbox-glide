@@ -16,6 +16,10 @@ struct ReplyComposerView: View {
         mailStore.messages.first(where: { $0.id == presentation.messageID })
     }
 
+    var thread: EmailThread? {
+        mailStore.thread(containing: presentation.messageID)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(presentation.mode == .aiReply ? "AI Reply" : "Reply")
@@ -31,6 +35,11 @@ struct ReplyComposerView: View {
                         Text("Subject: Re: \(message.subject)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let thread, thread.messageCount > 1 {
+                            Text("Replying in a \(thread.messageCount)-message thread")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                 }
@@ -103,7 +112,12 @@ struct ReplyComposerView: View {
 
     private func generate(message: EmailMessage) async {
         isGenerating = true
-        let reply = await ai.generateReply(from: message, note: note)
+        let reply: String
+        if let thread {
+            reply = await ai.generateReply(from: thread, note: note)
+        } else {
+            reply = await ai.generateReply(from: message, note: note)
+        }
         await MainActor.run {
             bodyText = reply
             isGenerating = false

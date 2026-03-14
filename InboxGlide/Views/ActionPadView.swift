@@ -14,10 +14,10 @@ struct ActionPadView: View {
                 actionButton(direction: .up)
                 actionButton(direction: .right)
 
-                if let message = mailStore.currentMessage {
-                    let isPinned = message.pinnedAt != nil
+                if let thread = mailStore.currentThread {
+                    let isPinned = thread.hasPinnedMessages
                     Button {
-                        mailStore.perform(action: .pin, isSecondary: false, messageID: message.id)
+                        mailStore.perform(action: .pin, isSecondary: false, messageID: thread.leadMessage.id)
                     } label: {
                         VStack(spacing: 6) {
                             shortcutBadge("⌘P")
@@ -32,7 +32,7 @@ struct ActionPadView: View {
                     }
                     .buttonStyle(.bordered)
                     .keyboardShortcut("p", modifiers: [.command])
-                    .help(isPinned ? "Unpin this email" : "Pin this email")
+                    .help(isPinned ? "Unpin this thread" : "Pin this thread")
                 }
             }
 

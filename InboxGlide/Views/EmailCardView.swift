@@ -10,11 +10,14 @@ struct EmailCardView: View {
     @State private var summaryColumnWidth: CGFloat = 280
     @State private var summaryColumnDragStartWidth: CGFloat?
 
-    let message: EmailMessage
+    let thread: EmailThread
     private let summaryColumnMinWidth: CGFloat = 220
     private let summaryColumnMaxWidth: CGFloat = 520
     private let bodyColumnMinWidth: CGFloat = 280
     private let columnDividerWidth: CGFloat = 8
+
+    private var message: EmailMessage { thread.leadMessage }
+    private var visibleMessages: [EmailMessage] { thread.visibleMessages }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -24,23 +27,23 @@ struct EmailCardView: View {
                 Text(message.subject)
                     .font(.system(size: 20 + preferences.fontScale, weight: .semibold))
                     .lineLimit(2)
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 6) {
                     Circle()
                         .fill(ageIndicatorColor())
                         .frame(width: 6, height: 6)
                         .accessibilityHidden(true)
-                    
+
                     Text(relativeTimeSinceReceived())
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
+            threadMetaRow
             contentArea
-
             footer
         }
         .padding(preferences.cardPadding)
@@ -51,21 +54,9 @@ struct EmailCardView: View {
         )
         .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 10)
         .accessibilityElement(children: .contain)
-        .onAppear {
-            if preferences.aiMode != .off {
-                summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
-            }
-        }
-        .onChange(of: message.id) { _, _ in
-            if preferences.aiMode != .off {
-                summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
-            }
-        }
-        .onChange(of: preferences.aiSummaryLength) { _, _ in
-            if preferences.aiMode != .off {
-                summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
-            }
-        }
+        .onAppear { summarizeLeadIfNeeded() }
+        .onChange(of: message.id) { _, _ in summarizeLeadIfNeeded() }
+        .onChange(of: preferences.aiSummaryLength) { _, _ in summarizeLeadIfNeeded() }
     }
 
     private var accountBanner: some View {
@@ -111,7 +102,7 @@ struct EmailCardView: View {
                     .foregroundStyle(.white)
                 HStack(spacing: 6) {
                     Text(message.senderEmail)
-                    Text("(\(formatFullDate()))")
+                    Text("(\(formatFullDate(message.receivedAt)))")
                         .foregroundStyle(.secondary)
                 }
                 .font(.system(size: 12 + preferences.fontScale))
@@ -121,76 +112,51 @@ struct EmailCardView: View {
             Spacer()
         }
     }
-    
-    private func formatFullDate() -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: message.receivedAt)
-    }
-    
-    private func relativeTimeSinceReceived() -> String {
-        let now = Date()
-        let components = Calendar.current.dateComponents([.minute, .hour, .day, .weekOfYear, .month, .year], from: message.receivedAt, to: now)
-        
-        if let years = components.year, years > 0 {
-            return "\(years)y ago"
+
+    private var threadMetaRow: some View {
+        HStack(spacing: 8) {
+            Label(thread.messageCount == 1 ? "1 message" : "\(thread.messageCount) messages", systemImage: "square.stack.3d.up")
+                .font(.caption.weight(.semibold))
+
+            if thread.unreadCount > 0 {
+                Label(thread.unreadCount == 1 ? "1 unread" : "\(thread.unreadCount) unread", systemImage: "circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.blue)
+            }
+
+            if !thread.participants.isEmpty {
+                Text(thread.participants.prefix(3).joined(separator: "  |  "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
         }
-        if let months = components.month, months >= 3 {
-            return "Over 3 months ago"
-        }
-        if let months = components.month, months >= 1 {
-            return "\(months)mo ago"
-        }
-        if let weeks = components.weekOfYear, weeks >= 1 {
-            return "\(weeks)w ago"
-        }
-        if let days = components.day, days >= 1 {
-            return "\(days)d ago"
-        }
-        if let hours = components.hour, hours > 0 {
-            return "\(hours)h ago"
-        }
-        if let minutes = components.minute, minutes > 0 {
-            return "\(minutes)m ago"
-        }
-        return "Just now"
-    }
-    
-    private func ageIndicatorColor() -> Color {
-        let now = Date()
-        let components = Calendar.current.dateComponents([.day, .weekOfYear, .month], from: message.receivedAt, to: now)
-        
-        if let months = components.month, months >= 3 {
-            return .gray // Dark gray for very old emails (> 3 months)
-        }
-        if let months = components.month, months >= 1 {
-            return .brown // Brown for old emails (1-3 months)
-        }
-        if let weeks = components.weekOfYear, weeks >= 1 {
-            return .orange // Orange for emails older than a week but less than a month
-        }
-        if let days = components.day, days >= 1 {
-            return .yellow // Yellow for emails older than a day but less than a week
-        }
-        return .green // Green for recent emails (< 24 hours)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(.separator, lineWidth: 1)
+        )
     }
 
     private var footer: some View {
         HStack(spacing: 10) {
-            if message.pinnedAt != nil {
+            if thread.hasPinnedMessages {
                 Label("Pinned", systemImage: "pin.fill")
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.blue)
                     .accessibilityLabel("Pinned")
             }
-            if message.isStarred {
+            if visibleMessages.contains(where: { $0.isStarred }) {
                 Label("Starred", systemImage: "star.fill")
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.yellow)
                     .accessibilityLabel("Starred")
             }
-            if message.isImportant {
+            if visibleMessages.contains(where: { $0.isImportant }) {
                 Label("Important", systemImage: "exclamationmark.circle.fill")
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.orange)
@@ -207,7 +173,7 @@ struct EmailCardView: View {
     }
 
     private var shouldShowBody: Bool {
-        if sanitizedHTMLBody != nil {
+        if sanitizedHTMLBody(for: message) != nil {
             return true
         }
         let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -218,21 +184,12 @@ struct EmailCardView: View {
     }
 
     private var shouldRenderHTMLBody: Bool {
-        preferences.emailBodyDisplayMode == .renderedHTML && sanitizedHTMLBody != nil
-    }
-
-    private var sanitizedHTMLBody: String? {
-        let value = message.htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !value.isEmpty else { return nil }
-        return HTMLContentCleaner.sanitizeHTMLForDisplay(
-            value,
-            blockTrackingPixels: preferences.blockTrackingPixels
-        ) ?? value
+        preferences.emailBodyDisplayMode == .renderedHTML && sanitizedHTMLBody(for: message) != nil
     }
 
     @ViewBuilder
     private var contentArea: some View {
-        if shouldShowBody {
+        if shouldShowBody || visibleMessages.count > 1 {
             if preferences.aiMode != .off {
                 GeometryReader { proxy in
                     let clampedSummaryWidth = clampedSummaryWidth(for: proxy.size.width)
@@ -304,21 +261,76 @@ struct EmailCardView: View {
 
     @ViewBuilder
     private var bodySection: some View {
-        Group {
-            if shouldRenderHTMLBody, let htmlBody = sanitizedHTMLBody {
-                EmailHTMLBodyView(html: htmlBody)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(message.body)
-                        .font(.system(size: 14 + preferences.fontScale))
-                        .foregroundStyle(.primary)
-                        .lineLimit(nil)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        if visibleMessages.count > 1 {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(visibleMessages, id: \.id) { threadMessage in
+                        conversationMessageCard(threadMessage)
+                    }
                 }
-                .frame(maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxHeight: .infinity, alignment: .top)
+        } else if shouldRenderHTMLBody, let htmlBody = sanitizedHTMLBody(for: message) {
+            EmailHTMLBodyView(html: htmlBody)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(displayBody(for: message))
+                    .font(.system(size: 14 + preferences.fontScale))
+                    .foregroundStyle(.primary)
+                    .lineLimit(nil)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    private func conversationMessageCard(_ threadMessage: EmailMessage) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(threadMessage.senderName)
+                        .font(.system(size: 13 + preferences.fontScale, weight: .semibold))
+                    Text(formatFullDate(threadMessage.receivedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if threadMessage.id == message.id {
+                    Label("Latest", systemImage: "clock.badge.checkmark")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.thinMaterial, in: Capsule(style: .continuous))
+                } else if !threadMessage.isRead {
+                    Label("Unread", systemImage: "circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.blue)
+                }
+            }
+
+            if let htmlBody = sanitizedHTMLBody(for: threadMessage),
+               threadMessage.id == message.id,
+               preferences.emailBodyDisplayMode == .renderedHTML {
+                EmailHTMLBodyView(html: htmlBody)
+                    .frame(minHeight: 220, maxHeight: 320, alignment: .topLeading)
+            } else {
+                Text(displayBody(for: threadMessage))
+                    .font(.system(size: 14 + preferences.fontScale))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(lineColor(for: threadMessage), lineWidth: 1)
         }
     }
 
@@ -391,6 +403,66 @@ struct EmailCardView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Email summary")
         }
+    }
+
+    private func summarizeLeadIfNeeded() {
+        if preferences.aiMode != .off {
+            summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
+        }
+    }
+
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func relativeTimeSinceReceived() -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day, .weekOfYear, .month, .year], from: message.receivedAt, to: now)
+
+        if let years = components.year, years > 0 { return "\(years)y ago" }
+        if let months = components.month, months >= 3 { return "Over 3 months ago" }
+        if let months = components.month, months >= 1 { return "\(months)mo ago" }
+        if let weeks = components.weekOfYear, weeks >= 1 { return "\(weeks)w ago" }
+        if let days = components.day, days >= 1 { return "\(days)d ago" }
+        if let hours = components.hour, hours > 0 { return "\(hours)h ago" }
+        if let minutes = components.minute, minutes > 0 { return "\(minutes)m ago" }
+        return "Just now"
+    }
+
+    private func ageIndicatorColor() -> Color {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.day, .weekOfYear, .month], from: message.receivedAt, to: now)
+
+        if let months = components.month, months >= 3 { return .gray }
+        if let months = components.month, months >= 1 { return .brown }
+        if let weeks = components.weekOfYear, weeks >= 1 { return .orange }
+        if let days = components.day, days >= 1 { return .yellow }
+        return .green
+    }
+
+    private func sanitizedHTMLBody(for message: EmailMessage) -> String? {
+        let value = message.htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !value.isEmpty else { return nil }
+        return HTMLContentCleaner.sanitizeHTMLForDisplay(
+            value,
+            blockTrackingPixels: preferences.blockTrackingPixels
+        ) ?? value
+    }
+
+    private func displayBody(for message: EmailMessage) -> String {
+        let trimmedBody = message.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedBody.isEmpty {
+            return trimmedBody
+        }
+        let trimmedPreview = message.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedPreview.isEmpty ? "No message body available." : trimmedPreview
+    }
+
+    private func lineColor(for threadMessage: EmailMessage) -> Color {
+        threadMessage.id == message.id ? ageIndicatorColor().opacity(0.45) : Color(nsColor: .separatorColor)
     }
 
     private func displayUrgency(_ value: String) -> String {
