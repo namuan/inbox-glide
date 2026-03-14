@@ -597,6 +597,11 @@ final class MailStore: ObservableObject {
             await markSyncStarted(provider: .gmail)
             let hasSession = await gmailAuthStore.hasSession(for: account.emailAddress)
             if !hasSession {
+                logger.warning(
+                    "Gmail sync skipped: no OAuth session.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress]
+                )
                 await MainActor.run {
                     errorAlert = ErrorAlert(
                         title: "Gmail Sync Failed",
@@ -616,8 +621,13 @@ final class MailStore: ObservableObject {
                             maxResults: 30
                         )
                     }
-                    upsertGmailMessages(for: account.emailAddress, items: items)
+                    await MainActor.run { self.upsertGmailMessages(for: account.emailAddress, items: items) }
                 } catch {
+                    logger.warning(
+                        "Gmail foreground sync failed.",
+                        category: "MailStore",
+                        metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                    )
                     await MainActor.run {
                         errorAlert = ErrorAlert(
                             title: "Gmail Sync Failed",
@@ -629,6 +639,13 @@ final class MailStore: ObservableObject {
             await markSyncFinished(provider: .gmail)
 
         case .yahoo:
+            let yahooMaxResults = max(20, min(120, preferences.connectSyncMaxResults))
+            let yahooBatchSize = min(max(4, preferences.connectSyncBatchSize), yahooMaxResults)
+            logger.info(
+                "Foreground Yahoo sync starting.",
+                category: "MailStore",
+                metadata: ["email": account.emailAddress, "maxResults": "\(yahooMaxResults)", "batchSize": "\(yahooBatchSize)"]
+            )
             do {
                 _ = try await withSyncTimeout(
                     seconds: syncTimeoutSeconds,
@@ -638,14 +655,16 @@ final class MailStore: ObservableObject {
                 ) { [self] in
                     try await syncYahooInboxProgressive(
                         for: account.emailAddress,
-                        maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
-                        batchSize: min(
-                            max(4, preferences.connectSyncBatchSize),
-                            max(20, min(120, preferences.connectSyncMaxResults))
-                        )
+                        maxResults: yahooMaxResults,
+                        batchSize: yahooBatchSize
                     )
                 }
             } catch {
+                logger.warning(
+                    "Yahoo foreground sync failed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
                 await MainActor.run {
                     errorAlert = ErrorAlert(
                         title: "Yahoo Sync Failed",
@@ -655,6 +674,13 @@ final class MailStore: ObservableObject {
             }
 
         case .fastmail:
+            let fastmailMaxResults = max(20, min(120, preferences.connectSyncMaxResults))
+            let fastmailBatchSize = min(max(4, preferences.connectSyncBatchSize), fastmailMaxResults)
+            logger.info(
+                "Foreground Fastmail sync starting.",
+                category: "MailStore",
+                metadata: ["email": account.emailAddress, "maxResults": "\(fastmailMaxResults)", "batchSize": "\(fastmailBatchSize)"]
+            )
             do {
                 _ = try await withSyncTimeout(
                     seconds: syncTimeoutSeconds,
@@ -664,14 +690,16 @@ final class MailStore: ObservableObject {
                 ) { [self] in
                     try await syncFastmailInboxProgressive(
                         for: account.emailAddress,
-                        maxResults: max(20, min(120, preferences.connectSyncMaxResults)),
-                        batchSize: min(
-                            max(4, preferences.connectSyncBatchSize),
-                            max(20, min(120, preferences.connectSyncMaxResults))
-                        )
+                        maxResults: fastmailMaxResults,
+                        batchSize: fastmailBatchSize
                     )
                 }
             } catch {
+                logger.warning(
+                    "Fastmail foreground sync failed.",
+                    category: "MailStore",
+                    metadata: ["email": account.emailAddress, "error": error.localizedDescription]
+                )
                 await MainActor.run {
                     errorAlert = ErrorAlert(
                         title: "Fastmail Sync Failed",
@@ -1999,6 +2027,12 @@ final class MailStore: ObservableObject {
         guard !yahooAccounts.isEmpty else { return }
 
         for account in yahooAccounts {
+            let bgMaxResults = max(10, min(120, preferences.backgroundIMAPFetchCount))
+            logger.debug(
+                "Background Yahoo sync starting.",
+                category: "MailStore",
+                metadata: ["email": account.emailAddress, "maxResults": "\(bgMaxResults)"]
+            )
             do {
                 _ = try await withSyncTimeout(
                     seconds: syncTimeoutSeconds,
@@ -2008,7 +2042,7 @@ final class MailStore: ObservableObject {
                 ) { [self] in
                     try await syncYahooInbox(
                         for: account.emailAddress,
-                        maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                        maxResults: bgMaxResults
                     )
                 }
                 logger.debug(
@@ -2033,6 +2067,12 @@ final class MailStore: ObservableObject {
         guard !fastmailAccounts.isEmpty else { return }
 
         for account in fastmailAccounts {
+            let bgMaxResults = max(10, min(120, preferences.backgroundIMAPFetchCount))
+            logger.debug(
+                "Background Fastmail sync starting.",
+                category: "MailStore",
+                metadata: ["email": account.emailAddress, "maxResults": "\(bgMaxResults)"]
+            )
             do {
                 _ = try await withSyncTimeout(
                     seconds: syncTimeoutSeconds,
@@ -2042,7 +2082,7 @@ final class MailStore: ObservableObject {
                 ) { [self] in
                     try await syncFastmailInbox(
                         for: account.emailAddress,
-                        maxResults: max(10, min(120, preferences.backgroundIMAPFetchCount))
+                        maxResults: bgMaxResults
                     )
                 }
                 logger.debug(

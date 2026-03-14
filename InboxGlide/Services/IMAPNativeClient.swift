@@ -125,23 +125,35 @@ actor IMAPNativeClient: MailClient {
         let connection = NWConnection(host: NWEndpoint.Host(config.hostname), port: port, using: params)
         self.connection = connection
 
-        try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(returning: ())
-                case .failed(let error):
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: error)
-                case .cancelled:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: IMAPClientError.connectionFailed)
-                default:
-                    break
+        do {
+            try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
+                try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
+                    connection.stateUpdateHandler = { state in
+                        switch state {
+                        case .ready:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(returning: ())
+                        case .failed(let error):
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: error)
+                        case .cancelled:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: IMAPClientError.connectionFailed)
+                        default:
+                            break
+                        }
+                    }
+                    connection.start(queue: .global(qos: .userInitiated))
                 }
             }
-            connection.start(queue: .global(qos: .userInitiated))
+        } catch {
+            logger.warning(
+                "IMAP TCP connection timed out or failed.",
+                category: "IMAP",
+                metadata: ["host": config.hostname, "port": "\(config.port)", "error": error.localizedDescription]
+            )
+            connection.cancel()
+            throw IMAPClientError.connectionFailed
         }
 
         let greeting = try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
@@ -173,6 +185,7 @@ actor IMAPNativeClient: MailClient {
     }
 
     func disconnect() async {
+        logger.debug("IMAP disconnect requested.", category: "IMAP", metadata: ["host": config.hostname])
         if let connection {
             if !Task.isCancelled {
                 _ = try? await sendCommand("LOGOUT")
@@ -182,6 +195,7 @@ actor IMAPNativeClient: MailClient {
         connection = nil
         receiveBuffer = Data()
         isConnected = false
+        logger.debug("IMAP disconnected.", category: "IMAP", metadata: ["host": config.hostname])
     }
 
     func fetchInboxUIDs(maxResults: Int, offset: Int = 0) async throws -> [String] {
@@ -699,23 +713,31 @@ actor SMTPNativeClient {
         self.connection = connection
         receiveBuffer = Data()
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.stateUpdateHandler = { (state: NWConnection.State) in
-                switch state {
-                case .ready:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume()
-                case .failed(let error):
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: error)
-                case .cancelled:
-                    connection.stateUpdateHandler = nil
-                    continuation.resume(throwing: SMTPClientError.connectionFailed)
-                default:
-                    break
+        do {
+            try await withTimeout(seconds: commandTimeoutSeconds) {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    connection.stateUpdateHandler = { (state: NWConnection.State) in
+                        switch state {
+                        case .ready:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume()
+                        case .failed(let error):
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: error)
+                        case .cancelled:
+                            connection.stateUpdateHandler = nil
+                            continuation.resume(throwing: SMTPClientError.connectionFailed)
+                        default:
+                            break
+                        }
+                    }
+                    connection.start(queue: .global(qos: .userInitiated))
                 }
             }
-            connection.start(queue: .global(qos: .userInitiated))
+        } catch {
+            connection.cancel()
+            self.connection = nil
+            throw SMTPClientError.connectionFailed
         }
 
         let greeting = try await withTimeout(seconds: commandTimeoutSeconds) { [self] in
