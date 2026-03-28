@@ -112,6 +112,7 @@ final class PreferencesStore: ObservableObject {
 
         static let aiMode = "ai.mode"
         static let aiSummaryLength = "ai.summaryLength"
+        static let aiSpamWarningsEnabled = "ai.spamWarningsEnabled"
         static let analyticsOptIn = "privacy.analyticsOptIn"
         static let crashOptIn = "privacy.crashOptIn"
         static let blockTrackingPixels = "privacy.blockTrackingPixels"
@@ -157,6 +158,7 @@ final class PreferencesStore: ObservableObject {
 
     @Published var aiMode: AIMode { didSet { defaults.set(aiMode.rawValue, forKey: Keys.aiMode) } }
     @Published var aiSummaryLength: AISummaryLength { didSet { defaults.set(aiSummaryLength.rawValue, forKey: Keys.aiSummaryLength) } }
+    @Published var aiSpamWarningsEnabled: Bool { didSet { defaults.set(aiSpamWarningsEnabled, forKey: Keys.aiSpamWarningsEnabled) } }
 
     @Published var analyticsOptIn: Bool { didSet { defaults.set(analyticsOptIn, forKey: Keys.analyticsOptIn) } }
     @Published var crashReportingOptIn: Bool { didSet { defaults.set(crashReportingOptIn, forKey: Keys.crashOptIn) } }
@@ -216,6 +218,7 @@ final class PreferencesStore: ObservableObject {
 
         self.aiMode = AIMode(rawValue: defaults.string(forKey: Keys.aiMode) ?? "") ?? .local
         self.aiSummaryLength = AISummaryLength(rawValue: defaults.string(forKey: Keys.aiSummaryLength) ?? "") ?? .short
+        self.aiSpamWarningsEnabled = defaults.object(forKey: Keys.aiSpamWarningsEnabled) as? Bool ?? true
         self.analyticsOptIn = defaults.object(forKey: Keys.analyticsOptIn) as? Bool ?? false
         self.crashReportingOptIn = defaults.object(forKey: Keys.crashOptIn) as? Bool ?? false
         self.blockTrackingPixels = defaults.object(forKey: Keys.blockTrackingPixels) as? Bool ?? true

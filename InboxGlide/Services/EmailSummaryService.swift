@@ -85,15 +85,24 @@ actor EmailSummarizer {
 
     private func computeSummary(for email: EmailMessage, length: AISummaryLength) async -> EmailSummaryResult {
         let subject = email.subject.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = Self.normalizedBody(email.body)
+        let normalized = Self.normalizedBody(textBody: email.body, htmlBody: email.htmlBody)
         let trimmedBody = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        let spamAssessment = Self.inferSpamAssessment(for: email, normalizedBody: trimmedBody)
 
         guard !trimmedBody.isEmpty else {
-            return EmailSummaryResult(summary: .minimal(subject: subject), source: .fallback, note: "No text body to summarize.")
+            return EmailSummaryResult(
+                summary: .minimal(subject: subject, spamConfidence: spamAssessment.confidence, spamReason: spamAssessment.reason),
+                source: .fallback,
+                note: "No text body to summarize."
+            )
         }
 
         guard trimmedBody.count >= 50 else {
-            return EmailSummaryResult(summary: .minimal(subject: subject), source: .fallback, note: "Email is too short for full summarization.")
+            return EmailSummaryResult(
+                summary: .minimal(subject: subject, spamConfidence: spamAssessment.confidence, spamReason: spamAssessment.reason),
+                source: .fallback,
+                note: "Email is too short for full summarization."
+            )
         }
 
         let supportedLanguages: Set<NLLanguage> = [
@@ -103,13 +112,13 @@ actor EmailSummarizer {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(trimmedBody)
         if let language = recognizer.dominantLanguage, !supportedLanguages.contains(language) {
-            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
+            let fallback = Self.fallbackSummary(for: email, subject: subject, body: trimmedBody, length: length)
             return EmailSummaryResult(summary: fallback, source: .fallback, note: "Language may be unsupported for on-device summarization.")
         }
 
         let thermal = ProcessInfo.processInfo.thermalState
         if thermal == .serious || thermal == .critical {
-            let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
+            let fallback = Self.fallbackSummary(for: email, subject: subject, body: trimmedBody, length: length)
             return EmailSummaryResult(
                 summary: fallback,
                 source: .fallback,
@@ -130,7 +139,6 @@ actor EmailSummarizer {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await summarizeWithFoundationModel(
-                subject: subject,
                 email: email,
                 inputBody: inputBody,
                 fullBody: trimmedBody,
@@ -140,29 +148,48 @@ actor EmailSummarizer {
         }
         #endif
 
-        let fallback = Self.fallbackSummary(subject: subject, body: trimmedBody, length: length)
+        let fallback = Self.fallbackSummary(for: email, subject: subject, body: trimmedBody, length: length)
         return EmailSummaryResult(summary: fallback, source: .fallback, note: note ?? "On-device model unavailable on this OS version.")
     }
 
-    private static func prompt(subject: String, senderName: String, senderEmail: String, receivedAt: Date, body: String) -> String {
-        """
-        Summarize the following email. Focus only on facts from the text.
-        From: \(senderName) <\(senderEmail)>
+    private static func prompt(for email: EmailMessage, subject: String, body: String) -> String {
+        let preview = email.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        let labels = email.labels.isEmpty ? "None" : email.labels.joined(separator: ", ")
+        let senderDomain = senderDomain(for: email.senderEmail) ?? "Unknown"
+        return """
+        Analyze and summarize the following email. Use only the metadata and content below.
+        Assess whether it appears to be legitimate, promotional, or potentially spam/phishing.
+        Avoid false positives for ordinary newsletters or marketing emails unless the content is deceptive or unsafe.
+        Treat sender-domain mismatch, brand impersonation, fake security alerts, fake refund/payment recovery requests, coercive calls to action, and awkward corporate wording as strong phishing indicators.
+        From: \(email.senderName) <\(email.senderEmail)>
+        Sender domain: \(senderDomain)
         Subject: \(subject)
-        Received: \(receivedAt.formatted(date: .abbreviated, time: .shortened))
+        Received: \(email.receivedAt.formatted(date: .abbreviated, time: .shortened))
+        Labels: \(labels)
+        Preview: \(preview.isEmpty ? "None" : preview)
         ---
         \(body)
         """
     }
 
-    private static func normalizedBody(_ body: String) -> String {
-        if HTMLContentCleaner.sanitizeHTML(body) != nil {
-            return HTMLContentCleaner.extractDisplayText(fromHTML: body)
+    private static func normalizedBody(textBody: String, htmlBody: String?) -> String {
+        let trimmedTextBody = textBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTextBody.isEmpty {
+            if HTMLContentCleaner.sanitizeHTML(trimmedTextBody) != nil {
+                return HTMLContentCleaner.extractDisplayText(fromHTML: trimmedTextBody)
+            }
+            return HTMLContentCleaner.cleanText(trimmedTextBody)
         }
-        return HTMLContentCleaner.cleanText(body)
+
+        let trimmedHTMLBody = htmlBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedHTMLBody.isEmpty {
+            return HTMLContentCleaner.extractDisplayText(fromHTML: trimmedHTMLBody)
+        }
+
+        return ""
     }
 
-    private static func fallbackSummary(subject: String, body: String, length: AISummaryLength) -> EmailSummary {
+    private static func fallbackSummary(for email: EmailMessage, subject: String, body: String, length: AISummaryLength) -> EmailSummary {
         let sentenceCount: Int
         let characterCap: Int
         switch length {
@@ -178,13 +205,142 @@ actor EmailSummarizer {
         }
         let sentenceSummary = firstSentences(in: body, maxCount: sentenceCount)
         let summaryBody = sentenceSummary.isEmpty ? String(body.prefix(characterCap)) : sentenceSummary
+        let spamAssessment = inferSpamAssessment(for: email, normalizedBody: body)
+        let category = spamAssessment.confidence >= EmailSummary.spamWarningThreshold
+            ? "spam"
+            : inferCategory(subject: subject, body: body)
         return .fallback(
             subject: subject,
             body: summaryBody,
             actionItems: extractActionItems(from: body),
-            category: inferCategory(subject: subject, body: body),
-            urgency: inferUrgency(subject: subject, body: body)
+            category: category,
+            urgency: inferUrgency(subject: subject, body: body),
+            spamConfidence: spamAssessment.confidence,
+            spamReason: spamAssessment.reason
         )
+    }
+
+    private static func inferSpamAssessment(for email: EmailMessage, normalizedBody: String) -> (confidence: Double, reason: String?) {
+        let loweredLabels = email.labels.map { $0.lowercased() }
+        if loweredLabels.contains(where: { $0.contains("spam") || $0.contains("junk") || $0.contains("phishing") }) {
+            return (0.99, "The provider metadata already labels this message as spam.")
+        }
+
+        let subject = email.subject.lowercased()
+        let preview = email.preview.lowercased()
+        let body = normalizedBody.lowercased()
+        let sender = "\(email.senderName)\n\(email.senderEmail)".lowercased()
+        let combined = [subject, preview, body].joined(separator: "\n")
+        let senderDomain = senderDomain(for: email.senderEmail)
+
+        var confidence = 0.04
+        var reasons: [String] = []
+
+        let signalGroups: [(reason: String, terms: [String], weight: Double)] = [
+            (
+                "The message uses account-verification or password-reset language.",
+                ["verify your account", "confirm your account", "reset your password", "password expires", "unusual sign-in", "account suspended", "account locked"],
+                0.28
+            ),
+            (
+                "The message pressures you with urgent or threatening language.",
+                ["urgent action required", "immediately", "within 24 hours", "final warning", "act now", "avoid suspension", "respond today"],
+                0.2
+            ),
+            (
+                "The message requests sensitive payment or personal information.",
+                ["social security", "bank account", "wire transfer", "gift card", "crypto", "payment failure", "billing information", "wallet phrase", "payment attempts", "unauthorized payment", "refund process", "reimbursement", "authorize refund", "financial position"],
+                0.26
+            ),
+            (
+                "The message pushes you to click a link, open an attachment, or download a file.",
+                ["click the link", "click below", "open the attachment", "download the file", "scan the qr code", "enable macros", "view complete details", "approve reimbursement process", "authorize refund process"],
+                0.18
+            )
+        ]
+
+        for group in signalGroups {
+            if containsAny(group.terms, in: combined) {
+                confidence += group.weight
+                reasons.append(group.reason)
+            }
+        }
+
+        if containsAny(["lottery", "prize", "winner", "claim reward", "free money"], in: combined) {
+            confidence += 0.24
+            reasons.append("The message includes giveaway or prize-claim language.")
+        }
+
+        if let domain = senderDomain,
+           domain.contains("xn--") || domain.hasSuffix(".zip") || domain.hasSuffix(".top") {
+            confidence += 0.18
+            reasons.append("The sender domain looks unusual.")
+        }
+
+        if let impersonatedBrand = matchedImpersonatedBrand(in: combined, senderDomain: senderDomain) {
+            confidence += 0.62
+            reasons.append("The email claims to be from \(impersonatedBrand.displayName), but the sender domain does not match.")
+        }
+
+        if containsAny(["security alert", "unusual activity", "suspicious account", "account restricted", "suspicious payment attempts", "unauthorized payment requests"], in: combined) {
+            confidence += 0.22
+            reasons.append("The message uses a fake security or account-compromise alert pattern.")
+        }
+
+        if containsAny(["refund", "reimbursement", "authorize refund", "approve reimbursement", "fund return"], in: combined),
+           containsAny(["security alert", "unusual activity", "suspicious account", "unauthorized payment"], in: combined) {
+            confidence += 0.18
+            reasons.append("The email combines a scare tactic with a refund or reimbursement workflow.")
+        }
+
+        if containsAny(["client support group", "support team", "help resources"], in: combined),
+           containsAny(["paypal", "apple", "microsoft", "amazon", "google", "bank"], in: combined) {
+            confidence += 0.08
+        }
+
+        if containsAny(["unsubscribe", "newsletter", "sale", "discount", "limited time offer"], in: combined),
+           confidence < EmailSummary.spamWarningThreshold {
+            confidence = max(0.12, confidence - 0.08)
+        }
+
+        if containsAny(["ceo", "finance", "hr", "support", "security"], in: sender),
+           containsAny(["gift card", "wire transfer", "password", "verify"], in: combined) {
+            confidence += 0.12
+            reasons.append("The sender identity and request pattern look mismatched.")
+        }
+
+        let clampedConfidence = min(max(confidence, 0), 0.99)
+        let reason = reasons.isEmpty ? nil : reasons.prefix(2).joined(separator: " ")
+        return (clampedConfidence, reason)
+    }
+
+    private static func containsAny(_ terms: [String], in text: String) -> Bool {
+        terms.contains(where: { text.contains($0) })
+    }
+
+    private static func senderDomain(for senderEmail: String) -> String? {
+        senderEmail.split(separator: "@").last.map { String($0).lowercased() }
+    }
+
+    private static func matchedImpersonatedBrand(in text: String, senderDomain: String?) -> (displayName: String, domainToken: String)? {
+        guard let senderDomain else { return nil }
+
+        let brands: [(displayName: String, mentions: [String], domainToken: String)] = [
+            ("PayPal", ["paypal"], "paypal"),
+            ("Apple", ["apple", "icloud", "app store"], "apple"),
+            ("Microsoft", ["microsoft", "office 365", "outlook"], "microsoft"),
+            ("Amazon", ["amazon", "prime"], "amazon"),
+            ("Google", ["google", "gmail"], "google"),
+            ("Bank", ["bank of america", "chase", "wells fargo", "citibank", "bank"], "bank")
+        ]
+
+        for brand in brands where containsAny(brand.mentions, in: text) {
+            if !senderDomain.contains(brand.domainToken) {
+                return (brand.displayName, brand.domainToken)
+            }
+        }
+
+        return nil
     }
 
     private static func firstSentences(in text: String, maxCount: Int) -> String {
@@ -284,8 +440,13 @@ actor EmailSummarizer {
     private static func fingerprint(for email: EmailMessage, length: AISummaryLength) -> String {
         var hasher = Hasher()
         hasher.combine(email.id)
+        hasher.combine(email.senderName)
+        hasher.combine(email.senderEmail)
         hasher.combine(email.subject)
+        hasher.combine(email.preview)
         hasher.combine(email.body)
+        hasher.combine(email.htmlBody)
+        hasher.combine(email.labels.joined(separator: "|"))
         hasher.combine(email.receivedAt.timeIntervalSince1970)
         hasher.combine(length.rawValue)
         hasher.combine(modelFingerprint)
@@ -308,7 +469,6 @@ actor EmailSummarizer {
     #if canImport(FoundationModels)
     @available(macOS 26.0, *)
     private func summarizeWithFoundationModel(
-        subject: String,
         email: EmailMessage,
         inputBody: String,
         fullBody: String,
@@ -317,7 +477,7 @@ actor EmailSummarizer {
     ) async -> EmailSummaryResult {
         let model = SystemLanguageModel.default
         guard model.isAvailable else {
-            let fallback = Self.fallbackSummary(subject: subject, body: fullBody, length: length)
+            let fallback = Self.fallbackSummary(for: email, subject: email.subject, body: fullBody, length: length)
             return EmailSummaryResult(
                 summary: fallback,
                 source: .fallback,
@@ -330,6 +490,11 @@ actor EmailSummarizer {
         \(summaryInstruction(for: length))
         Extract action items when present.
         Classify category and urgency.
+        Assess spam risk using the sender, metadata, and message body.
+        If an email claims to be from a well-known company but uses a mismatched sender domain, treat that as a major phishing signal.
+        Give high spam confidence to fake security alerts, login warnings, payment or refund authorization requests, and suspicious reimbursement workflows.
+        Return `spamConfidence` as a value from 0.0 to 1.0 and keep it low for ordinary promotions or newsletters unless the email appears deceptive, coercive, or unsafe.
+        Provide a short `spamReason` only when there is a meaningful risk signal.
         Focus only on the provided content.
         Do not hallucinate or infer details not in the email.
         """
@@ -337,7 +502,7 @@ actor EmailSummarizer {
         let session = LanguageModelSession(instructions: instructions)
         do {
             let response = try await session.respond(
-                to: Self.prompt(subject: subject, senderName: email.senderName, senderEmail: email.senderEmail, receivedAt: email.receivedAt, body: inputBody),
+                to: Self.prompt(for: email, subject: email.subject, body: inputBody),
                 generating: FoundationGeneratedEmailSummary.self
             )
             let generated = response.content
@@ -346,7 +511,9 @@ actor EmailSummarizer {
                 body: generated.body.trimmingCharacters(in: .whitespacesAndNewlines),
                 category: generated.category.trimmingCharacters(in: .whitespacesAndNewlines),
                 actionItems: generated.actionItems.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
-                urgency: generated.urgency.trimmingCharacters(in: .whitespacesAndNewlines)
+                urgency: generated.urgency.trimmingCharacters(in: .whitespacesAndNewlines),
+                spamConfidence: min(max(generated.spamConfidence, 0), 1),
+                spamReason: Self.normalizedOptionalText(generated.spamReason)
             )
             return EmailSummaryResult(summary: summary, source: .foundationModel, note: fallbackNote)
         } catch {
@@ -355,11 +522,16 @@ actor EmailSummarizer {
                 category: "EmailSummary",
                 metadata: ["error": String(describing: error)]
             )
-            let fallback = Self.fallbackSummary(subject: subject, body: fullBody, length: length)
+            let fallback = Self.fallbackSummary(for: email, subject: email.subject, body: fullBody, length: length)
             return EmailSummaryResult(summary: fallback, source: .fallback, note: fallbackNote ?? "Model generation failed, fallback used.")
         }
     }
     #endif
+
+    private static func normalizedOptionalText(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
     private func summaryInstruction(for length: AISummaryLength) -> String {
         switch length {
@@ -391,5 +563,11 @@ private struct FoundationGeneratedEmailSummary {
 
     @Guide(.anyOf(["low", "medium", "high"]))
     var urgency: String
+
+    @Guide(description: "A spam risk score from 0.0 for likely legitimate to 1.0 for highly suspicious or deceptive.")
+    var spamConfidence: Double
+
+    @Guide(description: "A short explanation of the most important spam or phishing signal. Return an empty string if no meaningful signal is present.")
+    var spamReason: String
 }
 #endif
