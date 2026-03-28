@@ -13,7 +13,7 @@ InboxGlide is a macOS SwiftUI app prototype for processing email as a card deck:
 - Local encrypted store (AES-GCM; key stored in macOS Keychain)
 - AI quick reply drafting (local stub) with local PII scrubbing
 - In-app AI/manual reply send status: Gmail, Yahoo, and Fastmail supported
-- Email summary with on-device Foundation Models support and local fallback
+- Email summary with on-device Foundation Models support, local fallback, and advisory spam warnings
 - Optional daily reminder notifications (Coming soon...)
 - Data export + delete-all
 - **Production-ready provider integrations:**

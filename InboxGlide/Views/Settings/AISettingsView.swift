@@ -21,11 +21,18 @@ struct AISettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
+                Toggle("Show spam warnings", isOn: $preferences.aiSpamWarningsEnabled)
+                    .disabled(preferences.aiMode == .off)
+
                 Text("Short keeps summaries compact, Medium balances length and detail, and Full asks AI for comprehensive coverage across long emails.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Text("Email summaries run on-device when available. If unavailable, the app falls back to a local rule-based summary.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Spam warnings use the same local analysis path and consider sender, subject, metadata, and body content before showing an advisory marker.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

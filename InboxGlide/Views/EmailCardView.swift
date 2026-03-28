@@ -378,6 +378,15 @@ struct EmailCardView: View {
                         .font(.system(size: 13 + preferences.fontScale))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if preferences.aiSpamWarningsEnabled {
+                        spamLikelihoodView(for: result.summary)
+                    }
+                    if preferences.aiSpamWarningsEnabled, result.summary.isPotentialSpam {
+                        Text(result.summary.spamReason ?? "This message shows spam or phishing-like signals in its sender, metadata, or content.")
+                            .font(.system(size: 12 + preferences.fontScale, weight: .semibold))
+                            .foregroundStyle(spamIndicatorColor(for: result.summary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if !result.summary.actionItems.isEmpty {
                         Text("Action items: \(result.summary.actionItems.joined(separator: "; "))")
                             .font(.system(size: 12 + preferences.fontScale))
@@ -472,6 +481,51 @@ struct EmailCardView: View {
         case "high": return "High"
         default: return "Info"
         }
+    }
+
+    private func spamIndicatorColor(for summary: EmailSummary) -> Color {
+        summary.clampedSpamConfidence >= 0.85 ? .red : .orange
+    }
+
+    private func spamLikelihoodView(for summary: EmailSummary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Spam risk")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 0)
+
+                Text("\(spamRiskLabel(for: summary)) · \(spamLikelihoodPercent(for: summary))%")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(spamIndicatorColor(for: summary))
+            }
+
+            ProgressView(value: summary.clampedSpamConfidence, total: 1.0)
+                .progressViewStyle(.linear)
+                .tint(spamIndicatorColor(for: summary))
+                .controlSize(.small)
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Spam risk \(spamRiskLabel(for: summary)), \(spamLikelihoodPercent(for: summary)) percent")
+    }
+
+    private func spamRiskLabel(for summary: EmailSummary) -> String {
+        switch summary.clampedSpamConfidence {
+        case ..<0.25:
+            return "Low"
+        case ..<0.65:
+            return "Medium"
+        case ..<0.85:
+            return "Elevated"
+        default:
+            return "High"
+        }
+    }
+
+    private func spamLikelihoodPercent(for summary: EmailSummary) -> Int {
+        Int((summary.clampedSpamConfidence * 100).rounded())
     }
 }
 
