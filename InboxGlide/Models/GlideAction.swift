@@ -15,6 +15,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
     case snooze1h
     case snooze4h
     case snooze1d
+    case unsnooze
     case createReminder
     case skip
     case reply
@@ -39,6 +40,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         case .snooze1h: return "Snooze 1 Hour"
         case .snooze4h: return "Snooze 4 Hours"
         case .snooze1d: return "Snooze 1 Day"
+        case .unsnooze: return "Unsnooze"
         case .createReminder: return "Create Reminder"
         case .skip: return "Skip"
         case .reply: return "Reply"
@@ -61,6 +63,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
         case .unsubscribeAndDeleteAllFromSender: return "bell.slash.fill"
         case .blockSender: return "hand.raised"
         case .snooze1h, .snooze4h, .snooze1d: return "zzz"
+        case .unsnooze: return "bell.badge"
         case .createReminder: return "checklist"
         case .skip: return "arrow.uturn.right"
         case .reply: return "arrowshape.turn.up.left"
@@ -80,7 +83,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
 
     var isSelectableInUI: Bool {
         switch self {
-        case .blockSender, .unsubscribe, .unsubscribeAndDeleteAllFromSender:
+        case .blockSender, .unsubscribe, .unsubscribeAndDeleteAllFromSender, .unsnooze:
             return false
         default:
             return true
@@ -88,7 +91,7 @@ enum GlideAction: String, Codable, CaseIterable, Identifiable {
     }
 
     var isLocalOnly: Bool {
-        self == .pin
+        self == .pin || self == .unsnooze
     }
 
     static var supportedInUI: [GlideAction] {

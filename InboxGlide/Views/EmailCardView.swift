@@ -144,6 +144,13 @@ struct EmailCardView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
+            if let snoozedUntil = message.snoozedUntil, snoozedUntil > Date() {
+                let snoozeLabel = formatSnoozeDate(snoozedUntil)
+                Label("Wakes \(snoozeLabel)", systemImage: "zzz")
+                    .font(.system(size: 11 + preferences.fontScale, weight: .medium))
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("Snoozed until \(snoozeLabel)")
+            }
             if thread.hasPinnedMessages {
                 Label("Pinned", systemImage: "pin.fill")
                     .labelStyle(.iconOnly)
@@ -425,6 +432,20 @@ struct EmailCardView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private func formatSnoozeDate(_ date: Date) -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day], from: now, to: date)
+        if let days = components.day, days >= 1 {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+        if let hours = components.hour, hours > 0 { return "in \(hours)h" }
+        if let minutes = components.minute, minutes > 0 { return "in \(minutes)m" }
+        return "soon"
     }
 
     private func relativeTimeSinceReceived() -> String {

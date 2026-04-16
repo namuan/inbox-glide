@@ -156,7 +156,8 @@ final class MailStore: ObservableObject {
 
     @Published var selectedAccountID: UUID? = nil { didSet { rebuildDeck() } }
     @Published var selectedCategory: MessageCategory? = nil { didSet { rebuildDeck() } }
-    @Published var showingPinnedOnly: Bool = false { didSet { rebuildDeck() } }
+    @Published var showingPinnedOnly: Bool = false { didSet { if showingPinnedOnly, showingSnoozed { showingSnoozed = false }; rebuildDeck() } }
+    @Published var showingSnoozed: Bool = false { didSet { if showingSnoozed, showingPinnedOnly { showingPinnedOnly = false }; rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
     @Published private(set) var visibleThreads: [EmailThread] = []
@@ -248,6 +249,14 @@ final class MailStore: ObservableObject {
         })
     }
 
+    var snoozedCount: Int {
+        let now = Date()
+        return messages.filter {
+            $0.deletedAt == nil && $0.archivedAt == nil &&
+            ($0.snoozedUntil ?? .distantPast) > now
+        }.count
+    }
+
     var isSyncing: Bool {
         !syncingProviders.isEmpty
     }
@@ -317,10 +326,14 @@ final class MailStore: ObservableObject {
 
             let visibleMessages = orderedMessages.filter { msg in
                 guard msg.archivedAt == nil,
-                      (msg.snoozedUntil ?? .distantPast) <= now,
                       !blockedSenders.contains(msg.senderEmail.lowercased())
                 else { return false }
-                if showingPinnedOnly && msg.pinnedAt == nil { return false }
+                if showingSnoozed {
+                    guard let snoozedUntil = msg.snoozedUntil, snoozedUntil > now else { return false }
+                } else {
+                    guard (msg.snoozedUntil ?? .distantPast) <= now else { return false }
+                    if showingPinnedOnly && msg.pinnedAt == nil { return false }
+                }
                 if let category = selectedCategory, msg.category != category { return false }
                 if unified {
                     if let selected = selectedAccountID { return msg.accountID == selected }
@@ -1771,6 +1784,12 @@ final class MailStore: ObservableObject {
             }
             deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
             clearSkippedState(for: messageID)
+
+        case .unsnooze:
+            for relatedID in relatedIDs {
+                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                messages[relatedIndex].snoozedUntil = nil
+            }
 
         case .createReminder:
             reminder = ReminderPresentation(messageID: leadMessageID(forThreadContaining: messageID))
