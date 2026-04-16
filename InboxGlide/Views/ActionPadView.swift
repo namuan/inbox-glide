@@ -52,6 +52,33 @@ struct ActionPadView: View {
                         .buttonStyle(.bordered)
                         .keyboardShortcut("u", modifiers: [.command])
                         .help("Wake this email now")
+                    } else {
+                        Menu {
+                            Button("Snooze 1 Hour") {
+                                mailStore.perform(action: .snooze1h, isSecondary: false, messageID: thread.leadMessage.id)
+                            }
+                            .keyboardShortcut("1", modifiers: [.command, .shift])
+                            Button("Snooze 4 Hours") {
+                                mailStore.perform(action: .snooze4h, isSecondary: false, messageID: thread.leadMessage.id)
+                            }
+                            .keyboardShortcut("4", modifiers: [.command, .shift])
+                            Button("Snooze 1 Day") {
+                                mailStore.perform(action: .snooze1d, isSecondary: false, messageID: thread.leadMessage.id)
+                            }
+                            .keyboardShortcut("d", modifiers: [.command, .shift])
+                        } label: {
+                            VStack(spacing: 6) {
+                                Image(systemName: "zzz")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.purple)
+                                Text("Snooze")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 110)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .help("Snooze this email")
                     }
                 }
             }
