@@ -29,6 +29,29 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
                 .padding(.vertical, 4)
                 .help("Show only pinned messages")
+
+                Button {
+                    mailStore.showingSnoozed.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("Snoozed", systemImage: "zzz")
+                        Spacer()
+                        if mailStore.showingSnoozed {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.orange)
+                                .accessibilityLabel("Snoozed filter active")
+                        }
+                        let count = mailStore.snoozedCount
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .help("Show snoozed messages")
             }
 
             Section {

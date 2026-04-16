@@ -33,6 +33,26 @@ struct ActionPadView: View {
                     .buttonStyle(.bordered)
                     .keyboardShortcut("p", modifiers: [.command])
                     .help(isPinned ? "Unpin this thread" : "Pin this thread")
+
+                    if mailStore.showingSnoozed {
+                        Button {
+                            mailStore.perform(action: .unsnooze, isSecondary: false, messageID: thread.leadMessage.id)
+                        } label: {
+                            VStack(spacing: 6) {
+                                shortcutBadge("⌘U")
+                                Image(systemName: "bell.badge")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.orange)
+                                Text("Unsnooze")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 110)
+                        }
+                        .buttonStyle(.bordered)
+                        .keyboardShortcut("u", modifiers: [.command])
+                        .help("Wake this email now")
+                    }
                 }
             }
 
