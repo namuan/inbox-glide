@@ -48,6 +48,7 @@ struct EmailMessage: Identifiable, Codable, Hashable {
     var deletedAt: Date?
     var snoozedUntil: Date?
     var pinnedAt: Date?
+    var pendingTrashSince: Date?
 
     var category: MessageCategory?
 }

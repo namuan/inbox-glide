@@ -52,6 +52,29 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
                 .padding(.vertical, 4)
                 .help("Show snoozed messages")
+
+                Button {
+                    mailStore.showingPendingTrash.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("Recently Deleted", systemImage: "trash.slash")
+                        Spacer()
+                        if mailStore.showingPendingTrash {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.red)
+                                .accessibilityLabel("Pending trash filter active")
+                        }
+                        let count = mailStore.pendingTrashCount
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .help("Show recently deleted messages pending provider trash")
             }
 
             Section {
