@@ -156,8 +156,9 @@ final class MailStore: ObservableObject {
 
     @Published var selectedAccountID: UUID? = nil { didSet { rebuildDeck() } }
     @Published var selectedCategory: MessageCategory? = nil { didSet { rebuildDeck() } }
-    @Published var showingPinnedOnly: Bool = false { didSet { if showingPinnedOnly, showingSnoozed { showingSnoozed = false }; rebuildDeck() } }
-    @Published var showingSnoozed: Bool = false { didSet { if showingSnoozed, showingPinnedOnly { showingPinnedOnly = false }; rebuildDeck() } }
+    @Published var showingPinnedOnly: Bool = false { didSet { if showingPinnedOnly { showingSnoozed = false; showingPendingTrash = false }; rebuildDeck() } }
+    @Published var showingSnoozed: Bool = false { didSet { if showingSnoozed { showingPinnedOnly = false; showingPendingTrash = false }; rebuildDeck() } }
+    @Published var showingPendingTrash: Bool = false { didSet { if showingPendingTrash { showingPinnedOnly = false; showingSnoozed = false }; rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
     @Published private(set) var visibleThreads: [EmailThread] = []
@@ -199,6 +200,7 @@ final class MailStore: ObservableObject {
     private let lowDeckSyncThreshold = 16
     private let proactiveSyncCooldown: TimeInterval = 45
     private let syncTimeoutSeconds: TimeInterval = 120
+    private let pendingTrashDelay: TimeInterval = 30
     private var threadsByID: [String: EmailThread] = [:]
     private var threadIDByMessageID: [UUID: String] = [:]
     private var visibleThreadIDByLeadMessageID: [UUID: String] = [:]
@@ -214,8 +216,10 @@ final class MailStore: ObservableObject {
         logger.info("Initializing MailStore.", category: "MailStore")
 
         loadOrBootstrap()
+        processPendingTrash()
 
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.processPendingTrash()
             self?.rebuildDeck()
         }
 
@@ -255,6 +259,10 @@ final class MailStore: ObservableObject {
             $0.deletedAt == nil && $0.archivedAt == nil &&
             ($0.snoozedUntil ?? .distantPast) > now
         }.count
+    }
+
+    var pendingTrashCount: Int {
+        messages.filter { $0.pendingTrashSince != nil }.count
     }
 
     var isSyncing: Bool {
@@ -309,7 +317,9 @@ final class MailStore: ObservableObject {
 
         let firstAccountID = accounts.first?.id
         let seeds = buildThreadSeeds(
-            from: messages.filter { $0.deletedAt == nil }
+            from: showingPendingTrash
+                ? messages.filter { $0.pendingTrashSince != nil }
+                : messages.filter { $0.deletedAt == nil }
         )
 
         var nextThreadsByID: [String: EmailThread] = [:]
@@ -324,23 +334,28 @@ final class MailStore: ObservableObject {
                 return lhs.id.uuidString < rhs.id.uuidString
             }
 
-            let visibleMessages = orderedMessages.filter { msg in
-                guard msg.archivedAt == nil,
-                      !blockedSenders.contains(msg.senderEmail.lowercased())
-                else { return false }
-                if showingSnoozed {
-                    guard let snoozedUntil = msg.snoozedUntil, snoozedUntil > now else { return false }
-                } else {
-                    guard (msg.snoozedUntil ?? .distantPast) <= now else { return false }
-                    if showingPinnedOnly && msg.pinnedAt == nil { return false }
-                }
-                if let category = selectedCategory, msg.category != category { return false }
-                if unified {
+            let visibleMessages: [EmailMessage]
+            if showingPendingTrash {
+                visibleMessages = orderedMessages.filter { $0.pendingTrashSince != nil }
+            } else {
+                visibleMessages = orderedMessages.filter { msg in
+                    guard msg.archivedAt == nil,
+                          !blockedSenders.contains(msg.senderEmail.lowercased())
+                    else { return false }
+                    if showingSnoozed {
+                        guard let snoozedUntil = msg.snoozedUntil, snoozedUntil > now else { return false }
+                    } else {
+                        guard (msg.snoozedUntil ?? .distantPast) <= now else { return false }
+                        if showingPinnedOnly && msg.pinnedAt == nil { return false }
+                    }
+                    if let category = selectedCategory, msg.category != category { return false }
+                    if unified {
+                        if let selected = selectedAccountID { return msg.accountID == selected }
+                        return true
+                    }
                     if let selected = selectedAccountID { return msg.accountID == selected }
-                    return true
+                    return msg.accountID == firstAccountID
                 }
-                if let selected = selectedAccountID { return msg.accountID == selected }
-                return msg.accountID == firstAccountID
             }
 
             let thread = EmailThread(
@@ -419,6 +434,33 @@ final class MailStore: ObservableObject {
 
     func cancelPendingAction() {
         pendingConfirmation = nil
+    }
+
+    func processPendingTrash() {
+        let now = Date()
+        for i in messages.indices {
+            guard let pendingSince = messages[i].pendingTrashSince else { continue }
+            guard now.timeIntervalSince(pendingSince) >= pendingTrashDelay else { continue }
+            messages[i].pendingTrashSince = nil
+            trashOnProviderIfPossible(messages[i])
+        }
+    }
+
+    func undoPendingTrash(messageID: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        messages[index].deletedAt = nil
+        messages[index].pendingTrashSince = nil
+        scheduleSave()
+        rebuildDeck()
+    }
+
+    func undoAllPendingTrash() {
+        for i in messages.indices where messages[i].pendingTrashSince != nil {
+            messages[i].deletedAt = nil
+            messages[i].pendingTrashSince = nil
+        }
+        scheduleSave()
+        rebuildDeck()
     }
 
     func syncIfPossible() {
@@ -1672,15 +1714,19 @@ final class MailStore: ObservableObject {
 
         switch action {
         case .delete:
-            markMessagesRead(ids: relatedIDs)
-            for relatedID in relatedIDs {
-                guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
-                messages[relatedIndex].deletedAt = Date()
-            }
-            deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
-            clearSkippedState(for: messageID)
-            for message in relatedMessages {
-                trashOnProviderIfPossible(message)
+            if let msgIdx = messages.firstIndex(where: { $0.id == messageID }),
+               messages[msgIdx].pendingTrashSince != nil {
+                messages[msgIdx].pendingTrashSince = nil
+                trashOnProviderIfPossible(messages[msgIdx])
+            } else {
+                markMessagesRead(ids: relatedIDs)
+                for relatedID in relatedIDs {
+                    guard let relatedIndex = messages.firstIndex(where: { $0.id == relatedID }) else { continue }
+                    messages[relatedIndex].deletedAt = Date()
+                    messages[relatedIndex].pendingTrashSince = Date()
+                }
+                deckMessageIDs.removeAll(where: { $0 == leadMessageID(forThreadContaining: messageID) })
+                clearSkippedState(for: messageID)
             }
 
         case .archive:

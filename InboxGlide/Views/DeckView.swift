@@ -124,6 +124,19 @@ struct DeckView: View {
                     .padding(.bottom, 18)
             }
 
+            if mailStore.showingPendingTrash, let message = mailStore.currentMessage {
+                VStack {
+                    Spacer()
+                    Button("Undo Delete", role: .cancel) {
+                        mailStore.undoPendingTrash(messageID: message.id)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .controlSize(.large)
+                    .padding(.bottom, 66)
+                }
+            }
+
             if isSpaceHeld, preferences.aiMode != .off, let message = mailStore.currentMessage {
                 VStack {
                     QuickAssistView(message: message)
