@@ -34,6 +34,11 @@ create_icns_from_png() {
     return 0
   fi
 
+  if [ -f "$ICON_ICNS" ] && [ "$ICON_ICNS" -nt "$ICON_PNG" ]; then
+    echo "AppIcon.icns is up to date. Skipping icon conversion."
+    return 0
+  fi
+
   rm -rf "$ICONSET_DIR"
   mkdir -p "$ICONSET_DIR"
 
@@ -72,14 +77,16 @@ apply_app_icon() {
 
 create_icns_from_png
 
-echo "Cleaning previous $SCHEME build artifacts..."
-xcodebuild \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
-  -configuration Release \
-  -destination "platform=macOS" \
-  -derivedDataPath "$DERIVED" \
-  clean
+if [[ "${1:-}" == "--clean" ]]; then
+  echo "Cleaning previous $SCHEME build artifacts..."
+  xcodebuild \
+    -project "$PROJECT" \
+    -scheme "$SCHEME" \
+    -configuration Release \
+    -destination "platform=macOS" \
+    -derivedDataPath "$DERIVED" \
+    clean
+fi
 
 echo "Building $SCHEME (Release)..."
 xcodebuild \
@@ -88,6 +95,7 @@ xcodebuild \
   -configuration Release \
   -destination "platform=macOS" \
   -derivedDataPath "$DERIVED" \
+  -jobs "$(sysctl -n hw.logicalcpu)" \
   build
 
 if [ ! -d "$PRODUCT" ]; then

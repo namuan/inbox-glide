@@ -9,6 +9,7 @@ struct EmailCardView: View {
 
     @State private var summaryColumnWidth: CGFloat = 280
     @State private var summaryColumnDragStartWidth: CGFloat?
+    @State private var isSummaryCollapsed = false
 
     let thread: EmailThread
     private let summaryColumnMinWidth: CGFloat = 220
@@ -57,6 +58,9 @@ struct EmailCardView: View {
         .onAppear { summarizeLeadIfNeeded() }
         .onChange(of: message.id) { _, _ in summarizeLeadIfNeeded() }
         .onChange(of: preferences.aiSummaryLength) { _, _ in summarizeLeadIfNeeded() }
+        .onChange(of: isSummaryCollapsed) { _, collapsed in
+            if !collapsed { summarizeLeadIfNeeded() }
+        }
     }
 
     private var accountBanner: some View {
@@ -203,39 +207,49 @@ struct EmailCardView: View {
                     HStack(alignment: .top, spacing: 0) {
                         bodySection
                             .frame(
-                                width: max(bodyColumnMinWidth, proxy.size.width - clampedSummaryWidth - columnDividerWidth),
+                                width: isSummaryCollapsed
+                                    ? proxy.size.width
+                                    : max(bodyColumnMinWidth, proxy.size.width - clampedSummaryWidth - columnDividerWidth),
                                 alignment: .topLeading
                             )
 
-                        Rectangle()
-                            .fill(.clear)
-                            .frame(width: columnDividerWidth)
-                            .contentShape(Rectangle())
-                            .overlay {
-                                Capsule(style: .continuous)
-                                    .fill(.separator.opacity(0.9))
-                                    .frame(width: 3, height: 34)
-                            }
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        let start = summaryColumnDragStartWidth ?? clampedSummaryWidth
-                                        if summaryColumnDragStartWidth == nil {
-                                            summaryColumnDragStartWidth = start
+                        if isSummaryCollapsed {
+                            expandButton
+                        } else {
+                            Rectangle()
+                                .fill(.clear)
+                                .frame(width: columnDividerWidth)
+                                .contentShape(Rectangle())
+                                .overlay {
+                                    Capsule(style: .continuous)
+                                        .fill(.separator.opacity(0.9))
+                                        .frame(width: 3, height: 34)
+                                }
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            let start = summaryColumnDragStartWidth ?? clampedSummaryWidth
+                                            if summaryColumnDragStartWidth == nil {
+                                                summaryColumnDragStartWidth = start
+                                            }
+                                            summaryColumnWidth = clamped(
+                                                start - value.translation.width,
+                                                min: summaryColumnMinWidth,
+                                                max: maxSummaryWidth(for: proxy.size.width)
+                                            )
                                         }
-                                        summaryColumnWidth = clamped(
-                                            start - value.translation.width,
-                                            min: summaryColumnMinWidth,
-                                            max: maxSummaryWidth(for: proxy.size.width)
-                                        )
-                                    }
-                                    .onEnded { _ in
-                                        summaryColumnDragStartWidth = nil
-                                    }
-                            )
+                                        .onEnded { _ in
+                                            summaryColumnDragStartWidth = nil
+                                        }
+                                )
 
-                        summarySection
-                            .frame(width: clampedSummaryWidth, alignment: .topLeading)
+                            summarySection
+                                .frame(width: clampedSummaryWidth, alignment: .topLeading)
+                                .overlay(alignment: .topTrailing) {
+                                    collapseButton
+                                        .padding(8)
+                                }
+                        }
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -243,12 +257,18 @@ struct EmailCardView: View {
                 bodySection
             }
         } else if preferences.aiMode != .off {
-            HStack(alignment: .top, spacing: 12) {
-                Spacer(minLength: 0)
-                summarySection
-                    .frame(width: 280, alignment: .topLeading)
+            if !isSummaryCollapsed {
+                HStack(alignment: .top, spacing: 12) {
+                    Spacer(minLength: 0)
+                    summarySection
+                        .frame(width: 280, alignment: .topLeading)
+                        .overlay(alignment: .topTrailing) {
+                            collapseButton
+                                .padding(8)
+                        }
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
-            .frame(maxHeight: .infinity, alignment: .top)
         } else {
             Spacer(minLength: 0)
         }
@@ -421,10 +441,33 @@ struct EmailCardView: View {
         }
     }
 
-    private func summarizeLeadIfNeeded() {
-        if preferences.aiMode != .off {
-            summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
+    private var collapseButton: some View {
+        Button(action: { isSummaryCollapsed = true }) {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .background(.regularMaterial, in: Circle())
         }
+        .buttonStyle(.plain)
+        .help("Hide summary")
+    }
+
+    private var expandButton: some View {
+        Button(action: { isSummaryCollapsed = false }) {
+            Image(systemName: "chevron.left")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .background(.regularMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Show summary")
+    }
+
+    private func summarizeLeadIfNeeded() {
+        guard !isSummaryCollapsed, preferences.aiMode != .off else { return }
+        summaries.summarizeIfNeeded(message, length: preferences.aiSummaryLength)
     }
 
     private func formatFullDate(_ date: Date) -> String {
