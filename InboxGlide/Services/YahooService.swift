@@ -61,6 +61,80 @@ final class YahooService {
         usesTLS: true
     )
 
+    /// Serializes all IMAP operations per email to prevent Yahoo from rejecting
+    /// concurrent LOGIN attempts from the same account.
+    private let imapLock = NSLock()
+    private var imapClientsByEmail: [String: IMAPNativeClient] = [:]
+
+    private func normalizeEmail(_ email: String) -> String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Returns or creates a shared IMAP client for the given email address.
+    /// Caller must hold `imapLock`.
+    private func imapClientLocked(for email: String, password: String) -> IMAPNativeClient {
+        let key = normalizeEmail(email)
+        if let existing = imapClientsByEmail[key] {
+            return existing
+        }
+        let credentials = IMAPCredentials(username: email, password: password)
+        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
+        imapClientsByEmail[key] = client
+        return client
+    }
+
+    /// Drops the cached IMAP client for the given email so the next operation
+    /// creates a fresh connection (used after auth failures or on explicit disconnect).
+    private func invalidateIMAPClient(for email: String) {
+        let key = normalizeEmail(email)
+        imapLock.lock()
+        let client = imapClientsByEmail.removeValue(forKey: key)
+        imapLock.unlock()
+        if let client {
+            Task { await client.disconnect() }
+        }
+    }
+
+    /// Ensures the shared IMAP connection is connected (or reconnected if needed),
+    /// then executes the given operation. Retries once on authentication failure
+    /// with a fresh connection in case Yahoo rejected a stale session.
+    private func withIMAPConnection<T>(
+        email: String,
+        password: String,
+        messageID: String? = nil,
+        operation: (IMAPNativeClient) async throws -> T
+    ) async throws -> T {
+        imapLock.lock()
+        let client = imapClientLocked(for: email, password: password)
+        imapLock.unlock()
+
+        do {
+            try await client.connect()
+            return try await operation(client)
+        } catch let error as IMAPClientError {
+            if case .authenticationFailed = error {
+                // Yahoo may have invalidated a previously valid session.
+                // Retry once with a brand-new connection.
+                logger.warning(
+                    "Yahoo IMAP auth failed on cached connection; retrying with fresh connection.",
+                    category: "YahooAPI",
+                    metadata: ["email": email]
+                )
+                invalidateIMAPClient(for: email)
+                imapLock.lock()
+                let freshClient = imapClientLocked(for: email, password: password)
+                imapLock.unlock()
+                do {
+                    try await freshClient.connect()
+                    return try await operation(freshClient)
+                } catch let retryError as IMAPClientError {
+                    throw mapIMAPError(retryError, messageID: messageID)
+                }
+            }
+            throw mapIMAPError(error, messageID: messageID)
+        }
+    }
+
     func fetchRecentInboxMessages(emailAddress: String, appPassword: String, maxResults: Int = 25) async throws -> [YahooInboxMessage] {
         let page = try await fetchRecentInboxMessagesPage(
             emailAddress: emailAddress,
@@ -72,11 +146,7 @@ final class YahooService {
     }
 
     func fetchRecentInboxMessagesPage(emailAddress: String, appPassword: String, maxResults: Int = 25, offset: Int = 0) async throws -> YahooInboxPage {
-        let credentials = IMAPCredentials(username: emailAddress, password: appPassword)
-        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
-        do {
-            try await client.connect()
-
+        try await withIMAPConnection(email: emailAddress, password: appPassword) { client in
             let uids = try await client.fetchInboxUIDs(maxResults: maxResults, offset: offset)
             var items: [YahooInboxMessage] = []
             items.reserveCapacity(uids.count)
@@ -97,14 +167,7 @@ final class YahooService {
                     "hasMore": "\(hasMore)"
                 ]
             )
-            await client.disconnect()
             return YahooInboxPage(messages: items, hasMore: hasMore, nextOffset: nextOffset)
-        } catch let error as IMAPClientError {
-            await client.disconnect()
-            throw mapIMAPError(error, messageID: nil)
-        } catch {
-            await client.disconnect()
-            throw error
         }
     }
 
@@ -126,10 +189,7 @@ final class YahooService {
             ]
         )
         let startedAt = Date()
-        let credentials = IMAPCredentials(username: emailAddress, password: appPassword)
-        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
-        do {
-            try await client.connect()
+        return try await withIMAPConnection(email: emailAddress, password: appPassword) { client in
             logger.debug("Yahoo IMAP client connected for progressive fetch.", category: "YahooAPI", metadata: ["email": emailAddress])
 
             let target = max(1, min(maxResults, 200))
@@ -213,64 +273,32 @@ final class YahooService {
                     "durationMs": "\(durationMs)"
                 ]
             )
-            await client.disconnect()
             return cumulative
-        } catch let error as IMAPClientError {
-            await client.disconnect()
-            logger.error(
-                "Yahoo progressive fetch failed.",
-                category: "YahooAPI",
-                metadata: ["email": emailAddress, "error": error.localizedDescription]
-            )
-            throw mapIMAPError(error, messageID: nil)
-        } catch {
-            await client.disconnect()
-            throw error
         }
     }
 
     func trashMessage(emailAddress: String, appPassword: String, id: String) async throws {
-        let credentials = IMAPCredentials(username: emailAddress, password: appPassword)
-        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
-        do {
-            try await client.connect()
+        try await withIMAPConnection(email: emailAddress, password: appPassword, messageID: id) { client in
             try await client.trashMessage(uid: id)
-            await client.disconnect()
             logger.info(
                 "Moved Yahoo message to trash.",
                 category: "YahooAPI",
                 metadata: ["email": emailAddress, "messageID": id]
             )
-        } catch let error as IMAPClientError {
-            await client.disconnect()
-            throw mapIMAPError(error, messageID: id)
-        } catch {
-            await client.disconnect()
-            throw error
         }
     }
 
     func archiveMessage(emailAddress: String, appPassword: String, id: String) async throws {
-        let credentials = IMAPCredentials(username: emailAddress, password: appPassword)
-        let client = IMAPNativeClient(config: providerConfig, credentials: credentials)
-        do {
-            try await client.connect()
+        try await withIMAPConnection(email: emailAddress, password: appPassword, messageID: id) { client in
             try await client.archiveMessage(
                 uid: id,
                 mailboxCandidates: ["Archive", "Archives", "INBOX.Archive", "INBOX.Archives"]
             )
-            await client.disconnect()
             logger.info(
                 "Archived Yahoo message.",
                 category: "YahooAPI",
                 metadata: ["email": emailAddress, "messageID": id]
             )
-        } catch let error as IMAPClientError {
-            await client.disconnect()
-            throw mapIMAPError(error, messageID: id)
-        } catch {
-            await client.disconnect()
-            throw error
         }
     }
 
