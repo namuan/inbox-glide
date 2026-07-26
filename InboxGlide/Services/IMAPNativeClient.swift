@@ -233,6 +233,13 @@ actor IMAPNativeClient: MailClient {
         let raw = try await fetchMessageRaw(uid: uid)
         let text = String(data: raw, encoding: .isoLatin1) ?? ""
 
+        // A message can be expunged after UID SEARCH but before UID FETCH. Yahoo
+        // replies with only the tagged OK line in that case, which is valid IMAP
+        // but has no RFC822 literal to parse.
+        guard containsUntaggedFetchResponse(in: text) else {
+            throw IMAPClientError.messageNotFound(uid)
+        }
+
         let flags = parseFlags(from: text)
         let internalDate = parseInternalDate(from: text)
         let rawMessage: Data
@@ -609,6 +616,15 @@ actor IMAPNativeClient: MailClient {
             throw IMAPClientError.invalidResponse("Invalid IMAP literal length.")
         }
         return data.subdata(in: start..<end)
+    }
+
+    private func containsUntaggedFetchResponse(in text: String) -> Bool {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(separator: "\n")
+            .contains { line in
+                line.range(of: "^\\* [0-9]+ FETCH(?: |$)", options: [.regularExpression, .caseInsensitive]) != nil
+            }
     }
 
     private func parseFlags(from text: String) -> [String] {

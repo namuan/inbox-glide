@@ -234,8 +234,16 @@ final class YahooService {
             var items: [YahooInboxMessage] = []
             items.reserveCapacity(uids.count)
             for uid in uids {
-                let fetched = try await client.fetchMessage(uid: uid)
-                items.append(parseYahooMessage(from: fetched))
+                do {
+                    let fetched = try await client.fetchMessage(uid: uid)
+                    items.append(parseYahooMessage(from: fetched))
+                } catch let error as IMAPClientError where Self.isMessageNotFound(error) {
+                    logger.debug(
+                        "Skipping Yahoo message removed after UID search.",
+                        category: "YahooAPI",
+                        metadata: ["email": emailAddress, "messageID": uid]
+                    )
+                }
             }
 
             let hasMore = uids.count == max(1, maxResults)
@@ -335,6 +343,13 @@ final class YahooService {
                         // receive so a late response cannot corrupt the next
                         // command. Reconnect before continuing with this batch.
                         try await client.connect()
+                        continue
+                    } catch let error as IMAPClientError where Self.isMessageNotFound(error) {
+                        logger.debug(
+                            "Skipping Yahoo message removed after UID search.",
+                            category: "YahooAPI",
+                            metadata: ["email": emailAddress, "messageID": uid]
+                        )
                         continue
                     }
                 }
@@ -476,6 +491,13 @@ final class YahooService {
     private static func isTimeout(_ error: IMAPClientError) -> Bool {
         if case .protocolError(let message) = error {
             return message.localizedCaseInsensitiveContains("timed out")
+        }
+        return false
+    }
+
+    private static func isMessageNotFound(_ error: IMAPClientError) -> Bool {
+        if case .messageNotFound = error {
+            return true
         }
         return false
     }
