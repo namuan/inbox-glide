@@ -340,10 +340,38 @@ actor IMAPNativeClient: MailClient {
         let payload = "\(tag) \(command)\r\n"
         let safeCommand = redactedCommand(command)
         logger.debug("IMAP command sent.", category: "IMAP", metadata: ["tag": tag, "command": safeCommand])
-        try await sendRaw(payload, over: connection)
-        let response = try await withTimeout(seconds: commandTimeoutSeconds) {
-            try await self.readUntilTaggedLine(tag: tag)
+        do {
+            try await sendRaw(payload, over: connection)
+            let response = try await withTimeout(seconds: commandTimeoutSeconds) {
+                try await self.readUntilTaggedLine(tag: tag)
+            }
+            return try processResponse(
+                response,
+                tag: tag,
+                safeCommand: safeCommand,
+                startedAt: startedAt
+            )
+        } catch let error as IMAPClientError {
+            // A timed-out receive is cancelled by withConnectionContinuation. The
+            // connection can no longer safely be reused because its next response
+            // may belong to the cancelled command.
+            if case .protocolError(let message) = error,
+               message.localizedCaseInsensitiveContains("timed out") {
+                resetConnection(ifCurrent: connection)
+            }
+            throw error
+        } catch {
+            resetConnection(ifCurrent: connection)
+            throw IMAPClientError.disconnected
         }
+    }
+
+    private func processResponse(
+        _ response: Data,
+        tag: String,
+        safeCommand: String,
+        startedAt: Date
+    ) throws -> Data {
         let status = parseTaggedStatus(tag: tag, from: response)
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         switch status {
@@ -395,14 +423,19 @@ actor IMAPNativeClient: MailClient {
 
     private func sendRaw(_ string: String, over connection: NWConnection) async throws {
         let data = Data(string.utf8)
-        try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
-            connection.send(content: data, completion: .contentProcessed { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(returning: ())
-            })
+        do {
+            try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Void>) in
+                connection.send(content: data, completion: .contentProcessed { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    continuation.resume(returning: ())
+                })
+            }
+        } catch {
+            resetConnection(ifCurrent: connection)
+            throw IMAPClientError.disconnected
         }
     }
 
@@ -467,23 +500,36 @@ actor IMAPNativeClient: MailClient {
         guard let connection else {
             throw IMAPClientError.disconnected
         }
-        return try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Data>) in
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let data, !data.isEmpty else {
-                    if isComplete {
-                        continuation.resume(throwing: IMAPClientError.disconnected)
-                    } else {
-                        continuation.resume(returning: Data())
+        do {
+            return try await withConnectionContinuation(for: connection) { (continuation: ContinuationBox<Data>) in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
                     }
-                    return
+                    guard let data, !data.isEmpty else {
+                        if isComplete {
+                            continuation.resume(throwing: IMAPClientError.disconnected)
+                        } else {
+                            continuation.resume(returning: Data())
+                        }
+                        return
+                    }
+                    continuation.resume(returning: data)
                 }
-                continuation.resume(returning: data)
             }
+        } catch {
+            resetConnection(ifCurrent: connection)
+            throw IMAPClientError.disconnected
         }
+    }
+
+    private func resetConnection(ifCurrent expectedConnection: NWConnection) {
+        guard connection === expectedConnection else { return }
+        expectedConnection.cancel()
+        connection = nil
+        receiveBuffer = Data()
+        isConnected = false
     }
 
     private func nextTag() -> String {

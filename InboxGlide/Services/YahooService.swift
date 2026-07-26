@@ -61,13 +61,60 @@ final class YahooService {
         usesTLS: true
     )
 
-    /// Serializes all IMAP operations per email to prevent Yahoo from rejecting
-    /// concurrent LOGIN attempts from the same account.
+    /// Guards cached-client lookup and the per-account operation locks below.
     private let imapLock = NSLock()
     private var imapClientsByEmail: [String: IMAPNativeClient] = [:]
+    private var imapOperationLocksByEmail: [String: IMAPOperationLock] = [:]
+
+    private actor IMAPOperationLock {
+        private var isLocked = false
+        private var waiters: [UUID: CheckedContinuation<Void, Error>] = [:]
+        private var waiterOrder: [UUID] = []
+
+        func lock() async throws {
+            if !isLocked {
+                isLocked = true
+                return
+            }
+            let waiterID = UUID()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    waiters[waiterID] = continuation
+                    waiterOrder.append(waiterID)
+                }
+            } onCancel: {
+                Task { await self.cancelWaiter(id: waiterID) }
+            }
+        }
+
+        func unlock() {
+            while let nextWaiterID = waiterOrder.first {
+                waiterOrder.removeFirst()
+                if let continuation = waiters.removeValue(forKey: nextWaiterID) {
+                    continuation.resume()
+                    return
+                }
+            }
+            isLocked = false
+        }
+
+        private func cancelWaiter(id: UUID) {
+            guard let continuation = waiters.removeValue(forKey: id) else { return }
+            waiterOrder.removeAll { $0 == id }
+            continuation.resume(throwing: CancellationError())
+        }
+    }
 
     private func normalizeEmail(_ email: String) -> String {
         email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Keeps the short registry mutations synchronous and outside the async IMAP
+    /// transaction. The lock is never held while awaiting network work.
+    private func withIMAPRegistry<T>(_ operation: () -> T) -> T {
+        imapLock.lock()
+        defer { imapLock.unlock() }
+        return operation()
     }
 
     /// Returns or creates a shared IMAP client for the given email address.
@@ -83,55 +130,91 @@ final class YahooService {
         return client
     }
 
+    /// Returns the lock that keeps the complete IMAP transaction exclusive for
+    /// one account. IMAPNativeClient is an actor, but it is reentrant at await
+    /// points, so actor isolation alone does not prevent commands interleaving.
+    /// Caller must hold `imapLock`.
+    private func imapOperationLockLocked(for email: String) -> IMAPOperationLock {
+        let key = normalizeEmail(email)
+        if let existing = imapOperationLocksByEmail[key] {
+            return existing
+        }
+        let lock = IMAPOperationLock()
+        imapOperationLocksByEmail[key] = lock
+        return lock
+    }
+
     /// Drops the cached IMAP client for the given email so the next operation
     /// creates a fresh connection (used after auth failures or on explicit disconnect).
-    private func invalidateIMAPClient(for email: String) {
+    private func invalidateIMAPClient(for email: String) async {
         let key = normalizeEmail(email)
-        imapLock.lock()
-        let client = imapClientsByEmail.removeValue(forKey: key)
-        imapLock.unlock()
+        let client = withIMAPRegistry {
+            imapClientsByEmail.removeValue(forKey: key)
+        }
         if let client {
-            Task { await client.disconnect() }
+            await client.disconnect()
+        }
+    }
+
+    private func withIMAPOperationLock<T>(
+        _ operationLock: IMAPOperationLock,
+        operation: () async throws -> T
+    ) async throws -> T {
+        try await operationLock.lock()
+        do {
+            try Task.checkCancellation()
+            let result = try await operation()
+            await operationLock.unlock()
+            return result
+        } catch {
+            await operationLock.unlock()
+            throw error
         }
     }
 
     /// Ensures the shared IMAP connection is connected (or reconnected if needed),
-    /// then executes the given operation. Retries once on authentication failure
-    /// with a fresh connection in case Yahoo rejected a stale session.
+    /// then executes the given operation. Read-only operations retry once with a
+    /// fresh socket because Yahoo may close an idle TLS connection without warning.
     private func withIMAPConnection<T>(
         email: String,
         password: String,
         messageID: String? = nil,
+        retryOnConnectionFailure: Bool = true,
         operation: (IMAPNativeClient) async throws -> T
     ) async throws -> T {
-        imapLock.lock()
-        let client = imapClientLocked(for: email, password: password)
-        imapLock.unlock()
+        let operationLock = withIMAPRegistry {
+            imapOperationLockLocked(for: email)
+        }
 
-        do {
-            try await client.connect()
-            return try await operation(client)
-        } catch let error as IMAPClientError {
-            if case .authenticationFailed = error {
-                // Yahoo may have invalidated a previously valid session.
-                // Retry once with a brand-new connection.
-                logger.warning(
-                    "Yahoo IMAP auth failed on cached connection; retrying with fresh connection.",
-                    category: "YahooAPI",
-                    metadata: ["email": email]
-                )
-                invalidateIMAPClient(for: email)
-                imapLock.lock()
-                let freshClient = imapClientLocked(for: email, password: password)
-                imapLock.unlock()
-                do {
-                    try await freshClient.connect()
-                    return try await operation(freshClient)
-                } catch let retryError as IMAPClientError {
-                    throw mapIMAPError(retryError, messageID: messageID)
-                }
+        return try await withIMAPOperationLock(operationLock) {
+            // Look up the client only after acquiring the operation lock. A prior
+            // transaction may have discarded and replaced a broken connection.
+            let client = withIMAPRegistry {
+                imapClientLocked(for: email, password: password)
             }
-            throw mapIMAPError(error, messageID: messageID)
+            do {
+                try await client.connect()
+                return try await operation(client)
+            } catch let error as IMAPClientError {
+                if retryOnConnectionFailure, Self.shouldRetryWithFreshConnection(error) {
+                    logger.warning(
+                        "Yahoo IMAP connection became unusable; retrying with a fresh connection.",
+                        category: "YahooAPI",
+                        metadata: ["email": email, "error": error.localizedDescription]
+                    )
+                    await invalidateIMAPClient(for: email)
+                    let freshClient = withIMAPRegistry {
+                        imapClientLocked(for: email, password: password)
+                    }
+                    do {
+                        try await freshClient.connect()
+                        return try await operation(freshClient)
+                    } catch let retryError as IMAPClientError {
+                        throw mapIMAPError(retryError, messageID: messageID)
+                    }
+                }
+                throw mapIMAPError(error, messageID: messageID)
+            }
         }
     }
 
@@ -189,7 +272,11 @@ final class YahooService {
             ]
         )
         let startedAt = Date()
-        return try await withIMAPConnection(email: emailAddress, password: appPassword) { client in
+        return try await withIMAPConnection(
+            email: emailAddress,
+            password: appPassword,
+            retryOnConnectionFailure: false
+        ) { client in
             logger.debug("Yahoo IMAP client connected for progressive fetch.", category: "YahooAPI", metadata: ["email": emailAddress])
 
             let target = max(1, min(maxResults, 200))
@@ -244,6 +331,10 @@ final class YahooService {
                             category: "YahooAPI",
                             metadata: ["email": emailAddress, "messageID": uid]
                         )
+                        // IMAPNativeClient discards its socket after a timed-out
+                        // receive so a late response cannot corrupt the next
+                        // command. Reconnect before continuing with this batch.
+                        try await client.connect()
                         continue
                     }
                 }
@@ -278,7 +369,12 @@ final class YahooService {
     }
 
     func trashMessage(emailAddress: String, appPassword: String, id: String) async throws {
-        try await withIMAPConnection(email: emailAddress, password: appPassword, messageID: id) { client in
+        try await withIMAPConnection(
+            email: emailAddress,
+            password: appPassword,
+            messageID: id,
+            retryOnConnectionFailure: false
+        ) { client in
             try await client.trashMessage(uid: id)
             logger.info(
                 "Moved Yahoo message to trash.",
@@ -289,7 +385,12 @@ final class YahooService {
     }
 
     func archiveMessage(emailAddress: String, appPassword: String, id: String) async throws {
-        try await withIMAPConnection(email: emailAddress, password: appPassword, messageID: id) { client in
+        try await withIMAPConnection(
+            email: emailAddress,
+            password: appPassword,
+            messageID: id,
+            retryOnConnectionFailure: false
+        ) { client in
             try await client.archiveMessage(
                 uid: id,
                 mailboxCandidates: ["Archive", "Archives", "INBOX.Archive", "INBOX.Archives"]
@@ -377,6 +478,17 @@ final class YahooService {
             return message.localizedCaseInsensitiveContains("timed out")
         }
         return false
+    }
+
+    private static func shouldRetryWithFreshConnection(_ error: IMAPClientError) -> Bool {
+        switch error {
+        case .authenticationFailed, .connectionFailed, .disconnected:
+            return true
+        case .protocolError(let message):
+            return message.localizedCaseInsensitiveContains("timed out")
+        case .messageNotFound, .invalidResponse:
+            return false
+        }
     }
 
     private func shouldSkipTimedOutUID(_ uid: String, emailAddress: String) -> Bool {
