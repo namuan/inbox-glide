@@ -54,6 +54,29 @@ struct SidebarView: View {
                 .help("Show snoozed messages")
 
                 Button {
+                    mailStore.showingSkipped.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("Skipped", systemImage: "arrow.uturn.right")
+                        Spacer()
+                        if mailStore.showingSkipped {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.orange)
+                                .accessibilityLabel("Skipped filter active")
+                        }
+                        let count = mailStore.skippedCount
+                        if count > 0 {
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .help("Show emails skipped during this session")
+
+                Button {
                     mailStore.showingPendingTrash.toggle()
                 } label: {
                     HStack(spacing: 8) {

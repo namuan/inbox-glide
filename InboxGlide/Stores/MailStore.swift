@@ -156,9 +156,10 @@ final class MailStore: ObservableObject {
 
     @Published var selectedAccountID: UUID? = nil { didSet { rebuildDeck() } }
     @Published var selectedCategory: MessageCategory? = nil { didSet { rebuildDeck() } }
-    @Published var showingPinnedOnly: Bool = false { didSet { if showingPinnedOnly { showingSnoozed = false; showingPendingTrash = false }; rebuildDeck() } }
-    @Published var showingSnoozed: Bool = false { didSet { if showingSnoozed { showingPinnedOnly = false; showingPendingTrash = false }; rebuildDeck() } }
-    @Published var showingPendingTrash: Bool = false { didSet { if showingPendingTrash { showingPinnedOnly = false; showingSnoozed = false }; rebuildDeck() } }
+    @Published var showingPinnedOnly: Bool = false { didSet { if showingPinnedOnly { showingSnoozed = false; showingPendingTrash = false; showingSkipped = false }; rebuildDeck() } }
+    @Published var showingSnoozed: Bool = false { didSet { if showingSnoozed { showingPinnedOnly = false; showingPendingTrash = false; showingSkipped = false }; rebuildDeck() } }
+    @Published var showingPendingTrash: Bool = false { didSet { if showingPendingTrash { showingPinnedOnly = false; showingSnoozed = false; showingSkipped = false }; rebuildDeck() } }
+    @Published var showingSkipped: Bool = false { didSet { if showingSkipped { showingPinnedOnly = false; showingSnoozed = false; showingPendingTrash = false }; rebuildDeck() } }
 
     @Published private(set) var deckMessageIDs: [UUID] = []
     @Published private(set) var visibleThreads: [EmailThread] = []
@@ -265,6 +266,10 @@ final class MailStore: ObservableObject {
         messages.filter { $0.pendingTrashSince != nil }.count
     }
 
+    var skippedCount: Int {
+        skippedThreadIDs.count
+    }
+
     var isSyncing: Bool {
         !syncingProviders.isEmpty
     }
@@ -342,6 +347,9 @@ final class MailStore: ObservableObject {
                     guard msg.archivedAt == nil,
                           !blockedSenders.contains(msg.senderEmail.lowercased())
                     else { return false }
+                    if showingSkipped {
+                        guard skippedThreadIDs.contains(seed.id) else { return false }
+                    }
                     if showingSnoozed {
                         guard let snoozedUntil = msg.snoozedUntil, snoozedUntil > now else { return false }
                     } else {
