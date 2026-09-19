@@ -10,6 +10,7 @@ struct EmailCardView: View {
     @State private var summaryColumnWidth: CGFloat = 280
     @State private var summaryColumnDragStartWidth: CGFloat?
     @State private var isSummaryCollapsed = false
+    @State private var didCopyBody = false
 
     let thread: EmailThread
     private let summaryColumnMinWidth: CGFloat = 220
@@ -30,6 +31,16 @@ struct EmailCardView: View {
                     .lineLimit(2)
 
                 Spacer()
+
+                Button(action: copyEmailBody) {
+                    Label(
+                        didCopyBody ? "Copied" : "Copy body",
+                        systemImage: didCopyBody ? "checkmark" : "doc.on.clipboard"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Copy email body")
 
                 HStack(spacing: 6) {
                     Circle()
@@ -532,6 +543,17 @@ struct EmailCardView: View {
         }
         let trimmedPreview = message.preview.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedPreview.isEmpty ? "No message body available." : trimmedPreview
+    }
+
+    private func copyEmailBody() {
+        let text = displayBody(for: message)
+        guard text != "No message body available." else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        didCopyBody = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            didCopyBody = false
+        }
     }
 
     private func lineColor(for threadMessage: EmailMessage) -> Color {

@@ -114,7 +114,8 @@ struct DeckView: View {
                                     dragOffset = .zero
                                 }
                             }
-                        }
+                        },
+                    including: .gesture
                 )
                 .accessibilityHint("Use trackpad drag or arrow keys to glide")
 
